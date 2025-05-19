@@ -1,7 +1,7 @@
 {
   "name": "assignment-3.2",
   "version": "1.0.0",
-  "description": "",
+  "description": "[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/WkLPf7o5)\r [![Open in Visual Studio Code](https://classroom.github.com/assets/open-in-vscode-718a45dd9cf7e7f842a935f5ebbe5719a5e09af4491e668f4dbf3b35d5cca122.svg)](https://classroom.github.com/online_ide?assignment_repo_id=11168133&assignment_repo_type=AssignmentRepo)",
   "main": "main.js",
   "scripts": {
     "start": "node main.js"
@@ -22,10 +22,18 @@
     "morgan": "^1.10.0",
     "mssql": "^6.2.0",
     "mysql2": "^3.3.4",
-    "nodemon": "^2.0.4",
+    "nodemon": "^2.0.22",
     "pg": "^8.2.1"
   },
   "devDependencies": {
     "mysql": "^2.18.1"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WED-2023/assignment3-2-325895332_326307246_assignment2.git"
+  },
+  "bugs": {
+    "url": "https://github.com/WED-2023/assignment3-2-325895332_326307246_assignment2/issues"
+  },
+  "homepage": "https://github.com/WED-2023/assignment3-2-325895332_326307246_assignment2#readme"
 }
