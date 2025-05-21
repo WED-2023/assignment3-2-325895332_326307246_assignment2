@@ -7,6 +7,14 @@ const session = require("client-sessions");
 const DButils = require("./routes/utils/DButils");
 var cors = require('cors')
 
+//CREATING DB TABLES IF DOESN'T EXIST
+DButils.createTablesIfNotExist()
+  .then(() => console.log("Database tables checked/created."))
+  .catch(err => {
+    console.error("Failed to create tables:", err);
+    process.exit(1);
+  });
+
 var app = express();
 app.use(logger("dev")); //logger
 app.use(express.json()); // parse application/json
