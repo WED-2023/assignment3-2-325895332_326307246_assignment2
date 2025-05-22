@@ -1,23 +1,65 @@
+// recipes_utils.js
 const axios = require("axios");
+const DButils = require("./DButils");
 const api_domain = "https://api.spoonacular.com/recipes";
 const api_key = process.env.spooncular_apiKey;
 
 /**
- * שולף את כל המידע של מתכון חיצוני (ללא תזונה)
+ * שולף את המידע של מתכון, חיצוני או משפחתי
+ * @param {string|number} recipe_id
+ * @param {boolean} [isSpoonacular=true] – true לקרוא ל-API, false ל־DB
+ * @returns {Promise<{ data: object }>} – תמיד מחזיר אובייקט עם המפתח .data
  */
-async function getRecipeInformation(recipe_id) {
-  return axios.get(
+async function getRecipeInformation(recipe_id, isSpoonacular = true) {
+  if (!isSpoonacular) {
+    // מקרים משפחתיים: שולפים מטבלת Recipes
+    const rows = await DButils.execQuery(`
+      SELECT
+        recipe_id AS id,
+        title,
+        image,
+        preparationTimeMinutes AS readyInMinutes,
+        popularity AS aggregateLikes,
+        isVegan AS vegan,
+        isVegetarian AS vegetarian,
+        isGlutenFree AS glutenFree,
+        servings,
+        instructions,
+        isSpoonacular
+      FROM Recipes
+      WHERE recipe_id = ${recipe_id}
+    `);
+    if (!rows.length) {
+      throw { status: 404, message: "Recipe not found in DB" };
+    }
+    // עוטפים בתצורה אחידה כמו AxiosResponse
+    return { data: rows[0] };
+  }
+  // מקרים חיצוניים: קריאה ל־API
+  const res = await axios.get(
     `${api_domain}/${recipe_id}/information`,
     { params: { includeNutrition: false, apiKey: api_key } }
   );
+  return res;
 }
 
 /**
- * ממיר תשובת API לאובייקט תצוגה מקדימה
+ * ממיר תשובת API/DB לאובייקט תצוגה מקדימה
+ * @param {string|number} recipe_id
+ * @param {boolean} [isSpoonacular=true]
  */
-async function getRecipePreview(recipe_id) {
-  const res = await getRecipeInformation(recipe_id);
-  const { id, title, readyInMinutes, image, aggregateLikes, vegan, vegetarian, glutenFree } = res.data;
+async function getRecipePreview(recipe_id, isSpoonacular = true) {
+  const res = await getRecipeInformation(recipe_id, isSpoonacular);
+  const {
+    id,
+    title,
+    readyInMinutes,
+    image,
+    aggregateLikes,
+    vegan,
+    vegetarian,
+    glutenFree
+  } = res.data;
   return {
     id,
     title,
@@ -31,45 +73,90 @@ async function getRecipePreview(recipe_id) {
 }
 
 /**
- * מקבילית: משוך תצוגה מקדימה עבור מערך IDs
+ * מקבילית: תצוגות מקדימות למערך IDs
+ * @param {Array<string|number>} recipe_ids_array
+ * @param {boolean} [isSpoonacular=true]
  */
-async function getRecipesPreview(recipe_ids_array) {
+async function getRecipesPreview(recipe_ids_array, isSpoonacular = true) {
   return Promise.all(
-    recipe_ids_array.map(id => getRecipePreview(id))
+    recipe_ids_array.map(id => getRecipePreview(id, isSpoonacular))
   );
 }
 
 /**
- * מחזיר פירוט מלא של מתכון חיצוני: מרכיבים, הוראות, מנות וכו'
+ * מחזיר פירוט מלא של מתכון, חיצוני או משפחתי
+ * @param {string|number} recipe_id
+ * @param {boolean} [isSpoonacular=true]
  */
-async function getRecipeDetails(recipe_id) {
-  const res = await getRecipeInformation(recipe_id);
+async function getRecipeDetails(recipe_id, isSpoonacular = true) {
+  // השימוש ב־getRecipeInformation יחזיר תמיד אובייקט עם .data
+  const res = await getRecipeInformation(recipe_id, isSpoonacular);
+
+  // במקרה חיצוני – extendedIngredients ועוד
+  if (isSpoonacular) {
+    const {
+      id, title, readyInMinutes, image, aggregateLikes,
+      vegan, vegetarian, glutenFree, servings,
+      extendedIngredients, analyzedInstructions
+    } = res.data;
+    const ingredients = extendedIngredients.map(i => i.original);
+    const instructions = analyzedInstructions.length
+      ? analyzedInstructions[0].steps.map(step => step.step)
+      : [];
+    return {
+      id,
+      title,
+      readyInMinutes,
+      image,
+      popularity: aggregateLikes,
+      vegan,
+      vegetarian,
+      glutenFree,
+      servings,
+      ingredients,
+      instructions
+    };
+  }
+
+  // במקרה משפחתי – כבר קיבלנו מ-DB את השדות הבסיסיים
   const {
-    id, title, readyInMinutes, image, aggregateLikes,
-    vegan, vegetarian, glutenFree, servings,
-    extendedIngredients, analyzedInstructions
+    id,
+    title,
+    readyInMinutes,
+    image,
+    aggregateLikes,
+    vegan,
+    vegetarian,
+    glutenFree,
+    servings,
+    instructions
   } = res.data;
-  const ingredients = extendedIngredients.map(i => i.original);
-  const instructions = analyzedInstructions.length
-    ? analyzedInstructions[0].steps.map(step => step.step)
-    : [];
+
+  // שולפים את רשימת החומרים מטבלת Ingredients
+  const ingRows = await DButils.execQuery(`
+    SELECT quantity, name
+      FROM Ingredients
+     WHERE recipe_id = ${recipe_id}
+  `);
+  const ingredients = ingRows.map(i => `${i.quantity} ${i.name}`);
+
   return {
     id,
     title,
     readyInMinutes,
     image,
     popularity: aggregateLikes,
-    vegan,
-    vegetarian,
-    glutenFree,
+    vegan: Boolean(vegan),
+    vegetarian: Boolean(vegetarian),
+    glutenFree: Boolean(glutenFree),
     servings,
     ingredients,
-    instructions
+    instructions: instructions.split("\n") // או שמותאם לפי איך שמירתם בעמודה
   };
 }
 
 /**
- * חיפוש מתכונים חיצוניים לפי מחרוזת וסינונים (מטבח, דיאטה, אי־סבילויות)
+ * חיפוש מתכונים חיצוניים לפי שם וסינונים
  */
 async function searchRecipes(query, number = 10, cuisine, diet, intolerances) {
   const params = { query, number, addRecipeInformation: true, apiKey: api_key };

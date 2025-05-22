@@ -1,12 +1,7 @@
 const DButils = require("./DButils");
 
-/**
- * שומר מתכון כמועדף לטבלת FavoriteRecipes
- * התייחסות ל־isSpoonacular ו־PK (user_id,recipe_id,isSpoonacular)
- * @param {string} user_id
- * @param {string|number} recipe_id
- * @param {boolean} [isSpoonacular=true]
- */
+
+
 async function markAsFavorite(user_id, recipe_id, isSpoonacular = true) {
   await DButils.execQuery(`
     INSERT INTO FavoriteRecipes (user_id, recipe_id, isSpoonacular)

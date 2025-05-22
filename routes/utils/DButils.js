@@ -56,7 +56,6 @@ exports.createTablesIfNotExist = async function () {
         familyWho VARCHAR(255),
         familyWhen VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        isSpoonacular BOOLEAN DEFAULT FALSE,
         FOREIGN KEY (user_id) REFERENCES users(user_id)
       )
     `);
