@@ -1,0 +1,6 @@
+{
+    "files.encoding": "utf8",
+  "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
+  "editor.renderControlCharacters": false,
+  "editor.unicodeHighlight.nonBasicASCII": false
+}
