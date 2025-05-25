@@ -2,8 +2,8 @@
 const axios = require("axios");
 const DButils = require("./DButils");
 const api_domain = "https://api.spoonacular.com/recipes";
-const api_key = process.env.spooncular_apiKey;
-
+const api_key = process.env.SPOONACULAR_API_KEY;
+console.log("Loaded Spoonacular API key:", api_key);
 /**
  * שולף את המידע של מתכון, חיצוני או משפחתי
  * @param {string|number} recipe_id
