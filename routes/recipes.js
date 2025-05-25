@@ -11,21 +11,30 @@ const user_utils    = require("./utils/user_utils");
 // --------------------------------------------------------------------------
 router.get("/", async (req, res, next) => {
   try {
-    let previews = [];
+    const payload = { random: [], lastWatched: [] };
 
-    if (req.session && req.session.user_id) {
-      // 1. נשלוף את 3 הצפיות האחרונות
-      const watched = await user_utils.getLastWatchedRecipes(req.session.user_id, 3);
-      if (watched.length) {
-        const ids = watched.map(r => r.recipe_id);
-        previews  = await recipes_utils.getRecipesPreview(ids);
+    /* --- 3 רנדומליים מה-Spoonacular (עמודת שמאל) ----------------------- */
+    payload.random = await recipes_utils.getRandomRecipes(3);
+
+    /* --- 3 אחרונים שצפה בהם משתמש מחובר (עמודת ימין) ------------------ */
+    if (req.session?.user_id) {
+      const watchedRows = await user_utils.getLastWatchedRecipes(
+        req.session.user_id,
+        3              // ‎LIMIT 3
+        /* ללא סינון isSpoonacular – מחזיר גם DB וגם API */
+      );
+
+      if (watchedRows.length) {
+        payload.lastWatched = await Promise.all(
+          watchedRows.map(w =>
+            // *חשוב* – לא להפוך את הערך!
+            recipes_utils.getRecipePreview(w.recipe_id, Boolean(w.isSpoonacular))
+          )
+        );
       }
-    } else {
-      // לא מחובר → 3 רנדומליים
-      previews = await recipes_utils.getRandomRecipes(3);
     }
 
-    res.status(200).send(previews);
+    res.status(200).send(payload);
   } catch (err) {
     next(err);
   }

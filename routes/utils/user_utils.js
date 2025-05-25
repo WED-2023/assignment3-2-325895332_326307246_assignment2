@@ -42,24 +42,26 @@ async function markAsWatched(user_id, recipe_id, isSpoonacular = true) {
 }
 
 /**
- * מחזיר את המתכונים הנצפים לאחרונה, ממוינים לפי watched_at יורד
- * @param {string} user_id
- * @param {number} [limit]  – אם רוצים להגביל
- * @param {boolean} [isSpoonacular=true]
- * @returns {Promise<Array<{recipe_id: string, isSpoonacular: boolean}>>}
+ * מחזיר את הצפיות האחרונות (מסוננות אופציונלית לפי isSpoonacular).
+ * @param {string}  user_id
+ * @param {number}  limit            – מספר מקס’ רשומות (אופציונלי)
+ * @param {boolean} [isSpoonacular]  – אם לא נשלח ⇒ ללא סינון
  */
-async function getLastWatchedRecipes(user_id, limit, isSpoonacular = true) {
+async function getLastWatchedRecipes(user_id, limit, isSpoonacular) {
   let query = `
     SELECT recipe_id, isSpoonacular
       FROM LastWatchedRecipes
-     WHERE user_id='${user_id}' AND isSpoonacular=${isSpoonacular ? 1 : 0}
-  ORDER BY watched_at DESC`;
-  if (limit) {
-    query += ` LIMIT ${limit}`;
+     WHERE user_id='${user_id}'`;
+
+  if (typeof isSpoonacular === "boolean") {
+    query += ` AND isSpoonacular=${isSpoonacular ? 1 : 0}`;
   }
-  const recipes = await DButils.execQuery(query);
-  return recipes;
-}
+
+  query += " ORDER BY watched_at DESC";
+  if (limit) query += ` LIMIT ${limit}`;
+
+  return DButils.execQuery(query);
+};
 
 module.exports = {
   markAsFavorite,
