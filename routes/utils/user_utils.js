@@ -3,6 +3,9 @@ const DButils = require("./DButils");
 
 
 async function markAsFavorite(user_id, recipe_id, isSpoonacular = true) {
+  if (typeof isSpoonacular !== "boolean") {
+    throw new Error("isSpoonacular flag must be boolean (true/false)");
+  }
   await DButils.execQuery(`
     INSERT INTO FavoriteRecipes (user_id, recipe_id, isSpoonacular)
     VALUES ('${user_id}', '${recipe_id}', ${isSpoonacular ? 1 : 0})
@@ -11,16 +14,15 @@ async function markAsFavorite(user_id, recipe_id, isSpoonacular = true) {
 }
 
 /**
- * מחזיר את המתכונים המועדפים (ברירת מחדל – חיצוניים בלבד)
+ * מחזיר את המתכונים המועדפים
  * @param {string} user_id
- * @param {boolean} [isSpoonacular=true]
  * @returns {Promise<Array<{recipe_id: string, isSpoonacular: boolean}>>}
  */
-async function getFavoriteRecipes(user_id, isSpoonacular = true) {
+async function getFavoriteRecipes(user_id) {
   const recipes = await DButils.execQuery(`
     SELECT recipe_id, isSpoonacular
       FROM FavoriteRecipes
-     WHERE user_id='${user_id}' AND isSpoonacular=${isSpoonacular ? 1 : 0}
+     WHERE user_id='${user_id}'
   `);
   return recipes;
 }

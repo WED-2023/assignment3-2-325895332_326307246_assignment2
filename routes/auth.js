@@ -58,7 +58,7 @@ router.post("/Register", async (req, res, next) => {
       '${user_details.country}', '${hash_password}', '${user_details.email}', '${user_details.profilePic}')`
     );
     // Success: tell frontend to redirect to login
-    res.status(201).send({ message: "user created, please login", success: true, redirect: "/login" });
+    res.status(201).send({ message: "user created, please login", success: true, redirect: "/Login" });
   } catch (error) {
     next(error);
   }
@@ -87,7 +87,7 @@ router.post("/Login", async (req, res, next) => {
     console.log("session user_id login: " + req.session.user_id);
 
     // return cookie
-    res.status(200).send({ message: "login succeeded " , success: true });
+    res.status(200).send({ message: "login succeeded " , success: true , redirect: "/recipes"});
   } catch (error) {
     next(error);
   }
@@ -96,7 +96,7 @@ router.post("/Login", async (req, res, next) => {
 router.post("/Logout", function (req, res) {
   console.log("session user_id Logout: " + req.session.user_id);
   req.session.reset(); // reset the session info --> send cookie when  req.session == undefined!!
-  res.send({ success: true, message: "logout succeeded" });
+  res.send({ success: true, message: "logout succeeded" , redirect: "/recipes"});
 });
 
 module.exports = router;
