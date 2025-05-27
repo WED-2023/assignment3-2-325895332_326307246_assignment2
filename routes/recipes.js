@@ -13,25 +13,25 @@ router.get("/", async (req, res, next) => {
   try {
     const payload = { random: [], lastWatched: [] };
 
-    /* --- 3 רנדומליים מה-Spoonacular (עמודת שמאל) ----------------------- */
+    // Always show 3 random Spoonacular recipes
     payload.random = await recipes_utils.getRandomRecipes(3);
 
-    /* --- 3 אחרונים שצפה בהם משתמש מחובר (עמודת ימין) ------------------ */
     if (req.session?.user_id) {
+      // User is logged in: show last watched
       const watchedRows = await user_utils.getLastWatchedRecipes(
         req.session.user_id,
-        3              // ‎LIMIT 3
-        /* ללא סינון isSpoonacular – מחזיר גם DB וגם API */
+        3
       );
-
       if (watchedRows.length) {
         payload.lastWatched = await Promise.all(
           watchedRows.map(w =>
-            // *חשוב* – לא להפוך את הערך!
             recipes_utils.getRecipePreview(w.recipe_id, Boolean(w.isSpoonacular))
           )
         );
       }
+    } else {
+      // User is not logged in: show login option
+      payload.lastWatched = { loginRequired: true, loginUrl: "/login" };
     }
 
     res.status(200).send(payload);
