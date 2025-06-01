@@ -91,9 +91,9 @@ router.get('/favorites', async (req, res, next) => {
 router.get('/myRecipes', async (req, res, next) => {
   try {
     const user_id = req.session.user_id;
-    // Get all recipes from DB where user_id matches
+    // Get all family recipes from DB where user_id matches and isFamilyRecipe is true
     const recipes = await DButils.execQuery(
-      `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}'`
+      `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}' AND isFamilyRecipe = true`
     );
     // Return previews for these recipes
     const previews = await Promise.all(
