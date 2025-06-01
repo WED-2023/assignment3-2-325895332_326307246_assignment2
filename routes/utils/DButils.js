@@ -46,7 +46,6 @@ exports.createTablesIfNotExist = async function () {
         title VARCHAR(255) NOT NULL,
         image VARCHAR(255),
         preparationTimeMinutes INT,
-        popularity INT DEFAULT 0,
         isVegan BOOLEAN DEFAULT FALSE,
         isVegetarian BOOLEAN DEFAULT FALSE,
         isGlutenFree BOOLEAN DEFAULT FALSE,
