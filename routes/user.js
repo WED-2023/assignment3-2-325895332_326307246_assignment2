@@ -54,36 +54,51 @@ router.post('/favorites', async (req,res,next) => {
 // });
 
 
-router.get('/favorites', async (req, res, next) => {
+router.get("/favorites", async (req, res, next) => {
   try {
     const user_id = req.session.user_id;
-    // שליפת כל המועדפים (עם הדגל isSpoonacular)
-    const allFavs = await user_utils.getFavoriteRecipes(user_id);
 
-    // הפרדה למתכונים חיצוניים ולמתכונים מקומיים
-    const spoonFavs = allFavs.filter(r => r.isSpoonacular);
-    const localFavs = allFavs.filter(r => !r.isSpoonacular);
+    // שליפת כל המועדפים + סינון רשומות פגומות (recipe_id ריק)
+    const allFavs = (await user_utils.getFavoriteRecipes(user_id))
+      .filter(r => r.recipe_id);
 
-    // שליפת תצוגות מקדימות מתאימות
+    // הפרדה לפי מקור
+    const spoonIds = allFavs.filter(r => r.isSpoonacular);
+    const localIds = allFavs.filter(r => !r.isSpoonacular);
+
+    // תצוגות מקדימות במקביל
     const spoonPreviews = await Promise.all(
-      spoonFavs.map(r =>
-        recipe_utils.getRecipePreview(r.recipe_id, true)
-      )
+      spoonIds.map(r => recipe_utils.getRecipePreview(r.recipe_id, true))
     );
     const localPreviews = await Promise.all(
-      localFavs.map(r =>
-        recipe_utils.getRecipePreview(r.recipe_id, false)
-      )
+      localIds.map(r => recipe_utils.getRecipePreview(r.recipe_id, false))
     );
 
-    // איחוד ושליחה
-    const previews = [...spoonPreviews, ...localPreviews];
-    res.status(200).send(previews);
+    res.status(200).send([...spoonPreviews, ...localPreviews]);
   } catch (error) {
     next(error);
   }
 });
 
+/**
+ * This path returns all family recipes created by the logged-in user (from DB only)
+ */
+router.get('/familyRecipes', async (req, res, next) => {
+  try {
+    const user_id = req.session.user_id;
+    // Get all family recipes from DB where user_id matches and isFamilyRecipe is true
+    const recipes = await DButils.execQuery(
+      `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}' AND isFamilyRecipe = true`
+    );
+    // Return previews for these recipes
+    const previews = await Promise.all(
+      recipes.map(r => recipe_utils.getRecipePreview(r.recipe_id, false))
+    );
+    res.status(200).send(previews);
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * This path returns all recipes created by the logged-in user (from DB only)
@@ -93,7 +108,7 @@ router.get('/myRecipes', async (req, res, next) => {
     const user_id = req.session.user_id;
     // Get all family recipes from DB where user_id matches and isFamilyRecipe is true
     const recipes = await DButils.execQuery(
-      `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}' AND isFamilyRecipe = true`
+      `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}'`
     );
     // Return previews for these recipes
     const previews = await Promise.all(

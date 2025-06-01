@@ -3,16 +3,20 @@ const DButils = require("./DButils");
 
 
 async function markAsFavorite(user_id, recipe_id, isSpoonacular = true) {
-  if (typeof isSpoonacular !== "boolean") {
-    throw new Error("isSpoonacular flag must be boolean (true/false)");
+  // ולידציה בסיסית למניעת רשומות ריקות / לא תקינות
+  if (recipe_id === undefined || recipe_id === null || recipe_id === "") {
+    throw { status: 400, message: "recipeId is required" };
   }
+  if (typeof isSpoonacular !== "boolean") {
+    throw { status: 400, message: "isSpoonacular flag must be boolean" };
+  }
+
   await DButils.execQuery(`
     INSERT INTO FavoriteRecipes (user_id, recipe_id, isSpoonacular)
     VALUES ('${user_id}', '${recipe_id}', ${isSpoonacular ? 1 : 0})
     ON DUPLICATE KEY UPDATE created_at = created_at
   `);
 }
-
 /**
  * מחזיר את המתכונים המועדפים
  * @param {string} user_id

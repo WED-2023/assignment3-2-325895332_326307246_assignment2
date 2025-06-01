@@ -11,31 +11,39 @@ console.log("Loaded Spoonacular API key:", api_key);
  * @returns {Promise<{ data: object }>} – תמיד מחזיר אובייקט עם המפתח .data
  */
 async function getRecipeInformation(recipe_id, isSpoonacular = false) {
+  // --------------------------------------------------------
+  //  מתכונים מקומיים – שליפה מה-DB
+  // --------------------------------------------------------
   if (!isSpoonacular) {
-    // מקרים משפחתיים: שולפים מטבלת Recipes
+    const id = parseInt(recipe_id, 10);
+    if (Number.isNaN(id)) {
+      throw { status: 400, message: "recipe_id must be numeric for DB source" };
+    }
+
     const rows = await DButils.execQuery(`
       SELECT
         recipe_id AS id,
         title,
         image,
         preparationTimeMinutes AS readyInMinutes,
-        popularity AS aggregateLikes,
-        isVegan AS vegan,
-        isVegetarian AS vegetarian,
-        isGlutenFree AS glutenFree,
+        isVegan        AS vegan,
+        isVegetarian   AS vegetarian,
+        isGlutenFree   AS glutenFree,
         servings,
         instructions,
-        isSpoonacular
+        FALSE          AS isSpoonacular
       FROM Recipes
-      WHERE recipe_id = ${recipe_id}
+      WHERE recipe_id = ${id}
     `);
     if (!rows.length) {
       throw { status: 404, message: "Recipe not found in DB" };
     }
-    // עוטפים בתצורה אחידה כמו AxiosResponse
-    return { data: rows[0] };
+    return { data: rows[0] };                     // אחידות ל-Axios
   }
-  // מקרים חיצוניים: קריאה ל־API
+
+  // --------------------------------------------------------
+  //  מתכונים חיצוניים – Spoonacular API
+  // --------------------------------------------------------
   const res = await axios.get(
     `${api_domain}/${recipe_id}/information`,
     { params: { includeNutrition: false, apiKey: api_key } }
@@ -55,7 +63,6 @@ async function getRecipePreview(recipe_id, isSpoonacular = false) {
     title,
     readyInMinutes,
     image,
-    aggregateLikes,
     vegan,
     vegetarian,
     glutenFree
@@ -65,7 +72,6 @@ async function getRecipePreview(recipe_id, isSpoonacular = false) {
     title,
     readyInMinutes,
     image,
-    popularity: aggregateLikes,
     vegan,
     vegetarian,
     glutenFree
@@ -95,7 +101,7 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
   // במקרה חיצוני – extendedIngredients ועוד
   if (isSpoonacular) {
     const {
-      id, title, readyInMinutes, image, aggregateLikes,
+      id, title, readyInMinutes, image,
       vegan, vegetarian, glutenFree, servings,
       extendedIngredients, analyzedInstructions
     } = res.data;
@@ -108,7 +114,6 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
       title,
       readyInMinutes,
       image,
-      popularity: aggregateLikes,
       vegan,
       vegetarian,
       glutenFree,
@@ -124,7 +129,6 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
     title,
     readyInMinutes,
     image,
-    aggregateLikes,
     vegan,
     vegetarian,
     glutenFree,
@@ -145,7 +149,6 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
     title,
     readyInMinutes,
     image,
-    popularity: aggregateLikes,
     vegan: Boolean(vegan),
     vegetarian: Boolean(vegetarian),
     glutenFree: Boolean(glutenFree),
@@ -169,7 +172,6 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances) {
     title: r.title,
     readyInMinutes: r.readyInMinutes,
     image: r.image,
-    popularity: r.aggregateLikes,
     vegan: r.vegan,
     vegetarian: r.vegetarian,
     glutenFree: r.glutenFree
@@ -188,7 +190,6 @@ async function getRandomRecipes(number = 10) {
     title: r.title,
     readyInMinutes: r.readyInMinutes,
     image: r.image,
-    popularity: r.aggregateLikes,
     vegan: r.vegan,
     vegetarian: r.vegetarian,
     glutenFree: r.glutenFree
@@ -214,7 +215,6 @@ async function createRecipe(user_id, data) {
     title,
     image           = null,
     readyInMinutes,
-    popularity      = 0,
     vegan           = false,
     vegetarian      = false,
     glutenFree      = false,
@@ -234,18 +234,18 @@ async function createRecipe(user_id, data) {
   ---------------------------------------------------------------------------*/
   const insertRecipeSQL = `
     INSERT INTO Recipes
-      (user_id, title, image, preparationTimeMinutes, popularity,
+      (user_id, title, image, preparationTimeMinutes, 
        isVegan, isVegetarian, isGlutenFree, servings,
-       instructions, isFamilyRecipe, familyWho, familyWhen, isSpoonacular)
+       instructions, isFamilyRecipe, familyWho, familyWhen)
     VALUES
       ('${user_id}', '${title}', ${image ? `'${image}'` : null},
-       ${readyInMinutes}, ${popularity},
+       ${readyInMinutes},
        ${vegan ? 1 : 0}, ${vegetarian ? 1 : 0}, ${glutenFree ? 1 : 0},
        ${servings}, '${instructions}',
        ${isFamilyRecipe ? 1 : 0},
        ${familyWho  ? `'${familyWho}'`  : null},
-       ${familyWhen ? `'${familyWhen}'` : null},
-       0)
+       ${familyWhen ? `'${familyWhen}'` : null}
+       )
   `;
   const result = await DButils.execQuery(insertRecipeSQL);
   const recipe_id = result.insertId;                 // LAST_INSERT_ID() :contentReference[oaicite:0]{index=0}
