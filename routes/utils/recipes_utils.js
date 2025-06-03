@@ -316,6 +316,38 @@ async function createRecipe(user_id, data) {
   return recipe_id;
 }
 
+/**
+ * בודק אם מתכון קיים במקור המבוקש (DB מקומי או Spoonacular).
+ * @param {string|number} recipe_id
+ * @param {boolean} [isSpoonacular=true] – true → Spoonacular, false → DB
+ * @returns {Promise<boolean>}           – true אם נמצא, אחרת false
+ */
+async function recipeExists(recipe_id, isSpoonacular = true) {
+  if (!isSpoonacular) {
+    // חיפוש מהיר ב-MySQL
+    const rows = await DButils.execQuery(`
+      SELECT 1
+        FROM Recipes
+       WHERE recipe_id = '${recipe_id}'
+       LIMIT 1
+    `);
+    return rows.length > 0;
+  }
+
+  // חיפוש חיצוני via Spoonacular – קריאה קלה ל-/information
+  try {
+    await axios.get(
+      `${api_domain}/${recipe_id}/information`,
+      { params: { includeNutrition: false, apiKey: api_key } }
+    );
+    return true;             // קיבלנו 200 → קיים
+  } catch (err) {
+    // 404 → לא קיים; כל שגיאה אחרת (403 quota, 500 וכו') נזרקת הלאה
+    if (err.response?.status === 404) return false;
+    throw err;
+  }
+}
+
 module.exports = {
   getRecipeInformation,
   getRecipePreview,
@@ -323,5 +355,6 @@ module.exports = {
   getRecipeDetails,
   searchRecipes,
   getRandomRecipes,
-  createRecipe
+  createRecipe,
+  recipeExists
 };

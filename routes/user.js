@@ -40,6 +40,11 @@ router.post('/favorites', async (req,res,next) => {
       throw { status: 400, message: "Invalid input for favorite recipe" };
     }
 
+    const exists = await recipe_utils.recipeExists(recipeId, isSpoonacular);
+    if (!exists) {
+      throw { status: 404, message: "Recipe not found" };
+    }
+    
     await user_utils.markAsFavorite(user_id, recipeId, isSpoonacular);
     res.status(200).send("The Recipe successfully saved as favorite");
     } catch(error){
