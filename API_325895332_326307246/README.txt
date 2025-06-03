@@ -1,0 +1,1 @@
+https://app.swaggerhub.com/apis-docs/bgu-e3b/recipesAPI/1.0.0

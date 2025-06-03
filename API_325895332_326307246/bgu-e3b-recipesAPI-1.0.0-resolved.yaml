@@ -1,0 +1,508 @@
+openapi: 3.0.0
+info:
+  title: Family-Recipe API
+  description: |
+    Contract between the Vue frontend and the Node + Express backend (commit 03-Jun-2025).   All paths, parameters and status-codes mirror the server implementation in **routes/auth.js**, **routes/recipes.js** and **routes/user.js**.
+  version: 1.0.0
+servers:
+- url: https://virtserver.swaggerhub.com/bgu-e3b/recipesAPI/1.0.0
+  description: SwaggerHub API Auto Mocking
+- url: https://family-recipe.example.com
+  description: Production
+- url: http://localhost:3000
+  description: Local development
+security:
+- cookieAuth: []
+paths:
+  /Register:
+    post:
+      tags:
+      - Auth
+      summary: Register a new user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegistration'
+        required: true
+      responses:
+        "201":
+          description: User created
+        "400":
+          description: Validation failed
+        "409":
+          description: Username already exists
+  /Login:
+    post:
+      tags:
+      - Auth
+      summary: Log in
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+        required: true
+      responses:
+        "200":
+          description: Login succeeded (cookie set)
+        "400":
+          description: Validation failed
+        "401":
+          description: Invalid username / password
+  /Logout:
+    post:
+      tags:
+      - Auth
+      summary: Log out
+      responses:
+        "200":
+          description: Session cleared
+      security:
+      - cookieAuth: []
+  /about:
+    get:
+      tags:
+      - Info
+      summary: Project & team info
+      responses:
+        "200":
+          description: Static project information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200'
+      security: []
+  /recipes:
+    get:
+      tags:
+      - Recipes
+      summary: Main-page data (random & last-watched)
+      responses:
+        "200":
+          description: Mixed random / last-watched previews
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200_1'
+      security: []
+    post:
+      tags:
+      - Recipes
+      summary: Create a new recipe
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewRecipe'
+        required: true
+      responses:
+        "201":
+          description: Recipe created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_201'
+        "400":
+          description: Validation failed
+        "401":
+          description: Login required
+      security:
+      - cookieAuth: []
+  /recipes/search:
+    get:
+      tags:
+      - Recipes
+      summary: Search recipes (Spoonacular)
+      parameters:
+      - name: query
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: number
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: cuisine
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: diet
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: intolerances
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecipePreview'
+        "400":
+          description: Missing query parameter
+  /recipes/{recipeId}:
+    get:
+      tags:
+      - Recipes
+      summary: Get full recipe details
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/recipeId'
+      - name: source
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - db
+          - spoon
+      responses:
+        "200":
+          description: Full recipe details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeDetails'
+        "400":
+          description: Invalid parameters
+        "404":
+          description: Recipe not found
+  /users/favorites:
+    get:
+      tags:
+      - Users
+      summary: List all favorite recipes
+      responses:
+        "200":
+          description: Favorite previews grouped by source
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/RecipePreview'
+        "401":
+          description: Unauthorized
+      security:
+      - cookieAuth: []
+    post:
+      tags:
+      - Users
+      summary: Add recipe to favorites
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FavoriteToggle'
+        required: true
+      responses:
+        "200":
+          description: Saved as favorite
+        "400":
+          description: Invalid input
+        "404":
+          description: Recipe not found
+      security:
+      - cookieAuth: []
+  /users/myRecipes:
+    get:
+      tags:
+      - Users
+      summary: All recipes created by the user
+      responses:
+        "200":
+          description: User-created recipe previews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecipePreview'
+        "401":
+          description: Unauthorized
+      security:
+      - cookieAuth: []
+  /users/familyRecipes:
+    get:
+      tags:
+      - Users
+      summary: Family recipes created by the user
+      responses:
+        "200":
+          description: Family recipe previews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecipePreview'
+        "401":
+          description: Unauthorized
+      security:
+      - cookieAuth: []
+  /alive:
+    get:
+      tags:
+      - Health
+      summary: Simple liveness probe
+      responses:
+        "200":
+          description: Server is alive
+      security: []
+components:
+  schemas:
+    UserRegistration:
+      required:
+      - confirmPassword
+      - country
+      - email
+      - firstname
+      - lastname
+      - password
+      - username
+      type: object
+      properties:
+        username:
+          pattern: "^[A-Za-z]{3,8}$"
+          type: string
+        firstname:
+          type: string
+        lastname:
+          type: string
+        country:
+          type: string
+          description: Value must appear in https://restcountries.com/v3.1/all
+        password:
+          type: string
+          description: "5-10 chars, ≥1 digit, ≥1 special"
+        confirmPassword:
+          type: string
+        email:
+          type: string
+          format: email
+        profilePic:
+          type: string
+          format: uri
+    UserLogin:
+      required:
+      - password
+      - username
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    FavoriteToggle:
+      required:
+      - recipeId
+      type: object
+      properties:
+        recipeId:
+          oneOf:
+          - type: string
+          - type: integer
+        isSpoonacular:
+          type: boolean
+          default: true
+    RecipePreview:
+      required:
+      - id
+      - image
+      - isFavorite
+      - isGlutenFree
+      - isVegan
+      - isVegetarian
+      - name
+      - popularity
+      - preparationTimeMinutes
+      - wasWatched
+      type: object
+      properties:
+        id:
+          oneOf:
+          - type: string
+          - type: integer
+        name:
+          type: string
+        image:
+          type: string
+          format: uri
+        preparationTimeMinutes:
+          type: integer
+        popularity:
+          type: integer
+          description: number of likes
+        isVegan:
+          type: boolean
+        isVegetarian:
+          type: boolean
+        isGlutenFree:
+          type: boolean
+        isFavorite:
+          type: boolean
+        wasWatched:
+          type: boolean
+    RecipeDetails:
+      allOf:
+      - $ref: '#/components/schemas/RecipePreview'
+      - required:
+        - ingredients
+        - instructions
+        - servings
+        type: object
+        properties:
+          servings:
+            type: integer
+          instructions:
+            type: array
+            items:
+              type: string
+          ingredients:
+            type: array
+            items:
+              oneOf:
+              - type: string
+              - required:
+                - name
+                - quantity
+                type: object
+                properties:
+                  name:
+                    type: string
+                  quantity:
+                    type: string
+    NewRecipe:
+      required:
+      - ingredients
+      - instructions
+      - readyInMinutes
+      - servings
+      - title
+      type: object
+      properties:
+        title:
+          type: string
+        image:
+          type: string
+          format: uri
+        readyInMinutes:
+          minimum: 1
+          type: integer
+        vegan:
+          type: boolean
+        vegetarian:
+          type: boolean
+        glutenFree:
+          type: boolean
+        servings:
+          minimum: 1
+          type: integer
+        instructions:
+          minItems: 1
+          type: array
+          items:
+            type: string
+        ingredients:
+          minItems: 1
+          type: array
+          items:
+            oneOf:
+            - type: string
+            - required:
+              - name
+              - quantity
+              type: object
+              properties:
+                name:
+                  type: string
+                quantity:
+                  type: string
+        isFamilyRecipe:
+          type: boolean
+          default: false
+        familyStory:
+          type: string
+    inline_response_200:
+      type: object
+      properties:
+        summary:
+          type: string
+        team:
+          type: array
+          items:
+            $ref: '#/components/schemas/inline_response_200_team'
+    inline_response_200_1:
+      required:
+      - lastWatched
+      - random
+      type: object
+      properties:
+        random:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipePreview'
+        lastWatched:
+          oneOf:
+          - type: array
+            items:
+              $ref: '#/components/schemas/RecipePreview'
+          - required:
+            - loginRequired
+            - loginUrl
+            type: object
+            properties:
+              loginRequired:
+                type: boolean
+              loginUrl:
+                type: string
+    inline_response_201:
+      required:
+      - message
+      - recipe_id
+      type: object
+      properties:
+        recipe_id:
+          oneOf:
+          - type: string
+          - type: integer
+        message:
+          type: string
+    recipeId:
+      oneOf:
+      - type: string
+      - type: integer
+    inline_response_200_team:
+      required:
+      - contact
+      - name
+      - role
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+        contact:
+          type: string
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      name: session
+      in: cookie
