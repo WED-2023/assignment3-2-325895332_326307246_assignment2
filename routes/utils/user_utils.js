@@ -10,11 +10,12 @@ const DButils = require("./DButils");
  */
 async function markAsFavorite(user_id, recipe_id, isSpoonacular = true) {
   // Validate input
-  if (recipe_id === undefined || recipe_id === null || recipe_id === "") {
-    throw { status: 400, message: "recipeId is required" };
-  }
-  if (typeof isSpoonacular !== "boolean") {
-    throw { status: 400, message: "isSpoonacular flag must be boolean" };
+  if (
+    user_id === undefined || user_id === null || user_id === "" ||
+    recipe_id === undefined || recipe_id === null || recipe_id === "" ||
+    typeof isSpoonacular !== "boolean"
+  ) {
+    throw { status: 400, message: "Invalid input for marking favorite" };
   }
   // Insert or update favorite recipe
   await DButils.execQuery(`
@@ -30,6 +31,9 @@ async function markAsFavorite(user_id, recipe_id, isSpoonacular = true) {
  * @returns {Promise<Array<{recipe_id: string, isSpoonacular: boolean}>>}
  */
 async function getFavoriteRecipes(user_id) {
+  if (user_id === undefined || user_id === null || user_id === "") {
+    throw { status: 400, message: "Invalid user_id" };
+  }
   const recipes = await DButils.execQuery(`
     SELECT recipe_id, isSpoonacular
       FROM FavoriteRecipes
@@ -45,6 +49,14 @@ async function getFavoriteRecipes(user_id) {
  * @param {boolean} [isSpoonacular=true] - Whether the recipe is from Spoonacular.
  */
 async function markAsWatched(user_id, recipe_id, isSpoonacular = true) {
+  // Validate input
+  if (
+    user_id === undefined || user_id === null || user_id === "" ||
+    recipe_id === undefined || recipe_id === null || recipe_id === "" ||
+    typeof isSpoonacular !== "boolean"
+  ) {
+    throw { status: 400, message: "Invalid input for marking watched" };
+  }
   // Insert or update last watched recipe
   await DButils.execQuery(`
     INSERT INTO LastWatchedRecipes (user_id, recipe_id, isSpoonacular)
@@ -62,6 +74,15 @@ async function markAsWatched(user_id, recipe_id, isSpoonacular = true) {
  * @returns {Promise<Array<{recipe_id: string, isSpoonacular: boolean}>>}
  */
 async function getLastWatchedRecipes(user_id, limit, isSpoonacular) {
+  if (user_id === undefined || user_id === null || user_id === "") {
+    throw { status: 400, message: "Invalid user_id" };
+  }
+  if (limit !== undefined && (typeof limit !== "number" || limit <= 0)) {
+    throw { status: 400, message: "Limit must be a positive number" };
+  }
+  if (isSpoonacular !== undefined && typeof isSpoonacular !== "boolean") {
+    throw { status: 400, message: "isSpoonacular must be boolean" };
+  }
   let query = `
     SELECT recipe_id, isSpoonacular
       FROM LastWatchedRecipes

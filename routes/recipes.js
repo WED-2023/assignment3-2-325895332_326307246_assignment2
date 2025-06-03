@@ -5,10 +5,12 @@ const router  = express.Router();
 const recipes_utils = require("./utils/recipes_utils");
 const user_utils    = require("./utils/user_utils");
 
-// --- GET /recipes   (main page) -------------------------------------------
-// • משתמש מחובר  → שלושת המתכונים האחרונים שצפה בהם (preview בלבד)
-// • לא מחובר      → 3 מתכונים אקראיים (preview)
-// --------------------------------------------------------------------------
+/**
+ * GET /recipes
+ * Main page endpoint.
+ * - If user is logged in: returns 3 last watched recipes (preview).
+ * - If not logged in: returns 3 random Spoonacular recipes (preview).
+ */
 router.get("/", async (req, res, next) => {
   try {
     const payload = { random: [], lastWatched: [] };
@@ -40,11 +42,12 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// --- POST /recipes  (create new recipe) -----------------------------------
-// • דורש session.valid
-// • גוף הבקשה חייב להכיל את כל שדות החובה (+ מערכי instructions / ingredients)
-// • יוצר רשומה(ות) בטבלאות Recipes + Ingredients
-// --------------------------------------------------------------------------
+/**
+ * POST /recipes
+ * Create a new recipe for the logged-in user.
+ * Expects all required fields in req.body.
+ * Validates input and creates records in Recipes and Ingredients tables.
+ */
 router.post("/", async (req, res, next) => {
   try {
     // 1. אימות התחברות
@@ -77,6 +80,32 @@ router.post("/", async (req, res, next) => {
       throw { status: 400, message: "Missing mandatory fields" };
     }
 
+    // Input validation
+    if (
+      typeof title !== "string" || !title.trim() ||
+      typeof readyInMinutes !== "number" || readyInMinutes <= 0 ||
+      typeof servings !== "number" || servings <= 0 ||
+      !Array.isArray(instructions) || !instructions.length ||
+      !Array.isArray(ingredients) || !ingredients.length ||
+      (typeof vegan !== "undefined" && typeof vegan !== "boolean") ||
+      (typeof vegetarian !== "undefined" && typeof vegetarian !== "boolean") ||
+      (typeof glutenFree !== "undefined" && typeof glutenFree !== "boolean") ||
+      (typeof isFamilyRecipe !== "undefined" && typeof isFamilyRecipe !== "boolean")
+    ) {
+      throw { status: 400, message: "Invalid or missing mandatory fields" };
+    }
+
+    // Validate each instruction and ingredient
+    if (!instructions.every(i => typeof i === "string" && i.trim())) {
+      throw { status: 400, message: "Instructions must be non-empty strings" };
+    }
+    if (!ingredients.every(i =>
+      (typeof i === "string" && i.trim()) ||
+      (typeof i === "object" && typeof i.name === "string" && i.name.trim() && typeof i.quantity === "string" && i.quantity.trim())
+    )) {
+      throw { status: 400, message: "Ingredients must be valid strings or objects with name and quantity" };
+    }
+
     // 4. יצירת המתכון ב-DB דרך util אחד מרוכז
     const recipe_id = await recipes_utils.createRecipe(
       user_id,
@@ -101,13 +130,18 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-// --------------------------------------------------------------------------
-// הנתיבים שהיו קיימים מלפני כן (search, random, :recipeId) – ללא שינוי
-// --------------------------------------------------------------------------
-
+/**
+ * GET /recipes/search
+ * Search for recipes using Spoonacular API with filters.
+ * Expects: query (required), number, cuisine, diet, intolerances in req.query.
+ */
 router.get("/search", async (req, res, next) => {
   try {
     const { query, number, cuisine, diet, intolerances } = req.query;
+    // Input validation
+    if (typeof query !== "string" || !query.trim()) {
+      throw { status: 400, message: "Query parameter is required" };
+    }
     const allowedNumbers = [5, 10, 15];
     let num = parseInt(number);
     if (!allowedNumbers.includes(num)) num = 5;
@@ -124,17 +158,21 @@ router.get("/search", async (req, res, next) => {
   }
 });
 
-// --------------------------------------------------------------------------
-// GET /recipes/:recipeId?source=db|spoon
-//   • source חובה:  db  → מחפש ב-MySQL   |   spoon → Spoonacular
-//   • אם source חסר / ערך לא מוכר → 400
-// --------------------------------------------------------------------------
+/**
+ * GET /recipes/:recipeId?source=db|spoon
+ * Get detailed information for a recipe by ID and source.
+ * - source must be 'db' or 'spoon'
+ * - If user is logged in, marks as watched and checks favorite status.
+ */
 router.get("/:recipeId", async (req, res, next) => {
   try {
     const { recipeId } = req.params;
     const  source      = (req.query.source || "").toLowerCase();
 
-    // 1. ולידציה לפרמטר source
+    // Input validation
+    if (!recipeId || typeof recipeId !== "string" && typeof recipeId !== "number") {
+      return res.status(400).send({ message: "Invalid recipeId" });
+    }
     if (!["db", "spoon"].includes(source)) {
       return res.status(400).send({
         message: "query-param 'source' must be 'db' or 'spoon'"

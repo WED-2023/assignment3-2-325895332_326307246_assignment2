@@ -5,7 +5,8 @@ const user_utils = require("./utils/user_utils");
 const recipe_utils = require("./utils/recipes_utils");
 
 /**
- * Authenticate all incoming requests by middleware
+ * Middleware to authenticate all incoming requests.
+ * Attaches user_id to req if session is valid, otherwise returns 401.
  */
 router.use(async function (req, res, next) {
   if (req.session && req.session.user_id) {
@@ -20,15 +21,25 @@ router.use(async function (req, res, next) {
   }
 });
 
-
 /**
- * This path gets body with recipeId and save this recipe in the favorites list of the logged-in user
+ * Add a recipe to the favorites list of the logged-in user.
+ * Expects: { recipeId, isSpoonacular } in req.body
  */
 router.post('/favorites', async (req,res,next) => {
   try{
     const user_id = req.session.user_id;
-    // TODO: validate isSpoonacular כאילו אם צריך לבדוק 
     const { recipeId, isSpoonacular = true } = req.body;
+
+    // Input validation
+    if (
+      recipeId === undefined ||
+      recipeId === null ||
+      recipeId === "" ||
+      (typeof isSpoonacular !== "boolean" && typeof isSpoonacular !== "undefined")
+    ) {
+      throw { status: 400, message: "Invalid input for favorite recipe" };
+    }
+
     await user_utils.markAsFavorite(user_id, recipeId, isSpoonacular);
     res.status(200).send("The Recipe successfully saved as favorite");
     } catch(error){
@@ -37,36 +48,20 @@ router.post('/favorites', async (req,res,next) => {
 })
 
 /**
- * This path returns the favorites recipes that were saved by the logged-in user
+ * Get all favorite recipes for the logged-in user.
+ * Returns an array of recipe previews.
  */
-// router.get('/favorites', async (req,res,next) => {
-//   try{
-//     const user_id = req.session.user_id;
-//     let favorite_recipes = {};
-//     const recipes = await user_utils.getFavoriteRecipes(user_id);
-//     let recipes_id_array = [];
-//     recipes.map((element) => recipes_id_array.push(element.recipe_id)); //extracting the recipe ids into array
-//     const results = await recipe_utils.getRecipesPreview(recipes_id_array);
-//     res.status(200).send(results);
-//   } catch(error){
-//     next(error); 
-//   }
-// });
-
-
 router.get("/favorites", async (req, res, next) => {
   try {
     const user_id = req.session.user_id;
+    if (!user_id) throw { status: 401, message: "Unauthorized" };
 
-    // שליפת כל המועדפים + סינון רשומות פגומות (recipe_id ריק)
     const allFavs = (await user_utils.getFavoriteRecipes(user_id))
       .filter(r => r.recipe_id);
 
-    // הפרדה לפי מקור
     const spoonIds = allFavs.filter(r => r.isSpoonacular);
     const localIds = allFavs.filter(r => !r.isSpoonacular);
 
-    // תצוגות מקדימות במקביל
     const spoonPreviews = await Promise.all(
       spoonIds.map(r => recipe_utils.getRecipePreview(r.recipe_id, true))
     );
@@ -81,16 +76,17 @@ router.get("/favorites", async (req, res, next) => {
 });
 
 /**
- * This path returns all family recipes created by the logged-in user (from DB only)
+ * Get all family recipes created by the logged-in user.
+ * Returns an array of recipe previews.
  */
 router.get('/familyRecipes', async (req, res, next) => {
   try {
     const user_id = req.session.user_id;
-    // Get all family recipes from DB where user_id matches and isFamilyRecipe is true
+    if (!user_id) throw { status: 401, message: "Unauthorized" };
+
     const recipes = await DButils.execQuery(
       `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}' AND isFamilyRecipe = true`
     );
-    // Return previews for these recipes
     const previews = await Promise.all(
       recipes.map(r => recipe_utils.getRecipePreview(r.recipe_id, false))
     );
@@ -101,16 +97,17 @@ router.get('/familyRecipes', async (req, res, next) => {
 });
 
 /**
- * This path returns all recipes created by the logged-in user (from DB only)
+ * Get all recipes created by the logged-in user.
+ * Returns an array of recipe previews.
  */
 router.get('/myRecipes', async (req, res, next) => {
   try {
     const user_id = req.session.user_id;
-    // Get all family recipes from DB where user_id matches and isFamilyRecipe is true
+    if (!user_id) throw { status: 401, message: "Unauthorized" };
+
     const recipes = await DButils.execQuery(
       `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}'`
     );
-    // Return previews for these recipes
     const previews = await Promise.all(
       recipes.map(r => recipe_utils.getRecipePreview(r.recipe_id, false))
     );

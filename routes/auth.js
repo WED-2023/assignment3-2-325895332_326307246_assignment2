@@ -17,6 +17,24 @@ router.post("/Register", async (req, res, next) => {
       profilePic: req.body.profilePic
     };
 
+    // Input validation
+    if (
+      typeof user_details.username !== "string" ||
+      typeof user_details.firstname !== "string" ||
+      typeof user_details.lastname !== "string" ||
+      typeof user_details.country !== "string" ||
+      typeof user_details.password !== "string" ||
+      typeof user_details.email !== "string" ||
+      !user_details.username.trim() ||
+      !user_details.firstname.trim() ||
+      !user_details.lastname.trim() ||
+      !user_details.country.trim() ||
+      !user_details.password.trim() ||
+      !user_details.email.trim()
+    ) {
+      throw { status: 400, message: "All fields are required and must be non-empty strings." };
+    }
+
     // Username: 3-8 letters, only alphabetic
     if (!/^[A-Za-z]{3,8}$/.test(user_details.username)) {
       throw { status: 400, message: "Username must be 3-8 letters only." };
@@ -33,6 +51,11 @@ router.post("/Register", async (req, res, next) => {
         message:
           "Password must be 5-10 characters, include at least one digit and one special character."
       };
+    }
+
+    // Email format validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user_details.email)) {
+      throw { status: 400, message: "Invalid email format." };
     }
 
     // Validate country using REST Countries API
@@ -57,7 +80,6 @@ router.post("/Register", async (req, res, next) => {
       `INSERT INTO users (username, firstname, lastname, country, password, email, profilePic) VALUES ('${user_details.username}', '${user_details.firstname}', '${user_details.lastname}',
       '${user_details.country}', '${hash_password}', '${user_details.email}', '${user_details.profilePic}')`
     );
-    // Success: tell frontend to redirect to login
     res.status(201).send({ message: "user created, please login", success: true, redirect: "/Login" });
   } catch (error) {
     next(error);
@@ -66,10 +88,20 @@ router.post("/Register", async (req, res, next) => {
 
 router.post("/Login", async (req, res, next) => {
   try {
+    // Input validation
+    if (
+      typeof req.body.username !== "string" ||
+      typeof req.body.password !== "string" ||
+      !req.body.username.trim() ||
+      !req.body.password.trim()
+    ) {
+      throw { status: 400, message: "Invalid username or password" };
+    }
+
     // check that username exists
     const users = await DButils.execQuery("SELECT username FROM users");
     if (!users.find((x) => x.username === req.body.username))
-      throw { status: 401, message: "Username or Password incorrect" };
+      throw { status: 401, message: "Invalid username or password" };
 
     // check that the password is correct
     const user = (
@@ -79,14 +111,12 @@ router.post("/Login", async (req, res, next) => {
     )[0];
 
     if (!bcrypt.compareSync(req.body.password, user.password)) {
-      throw { status: 401, message: "Username or Password incorrect" };
+      throw { status: 401, message: "Invalid username or password" };
     }
 
-    // Set cookie
     req.session.user_id = user.user_id;
     console.log("session user_id login: " + req.session.user_id);
 
-    // return cookie
     res.status(200).send({ message: "login succeeded " , success: true , redirect: "/recipes"});
   } catch (error) {
     next(error);
@@ -97,6 +127,42 @@ router.post("/Logout", function (req, res) {
   console.log("session user_id Logout: " + req.session.user_id);
   req.session.reset(); // reset the session info --> send cookie when  req.session == undefined!!
   res.send({ success: true, message: "logout succeeded" , redirect: "/recipes"});
+});
+
+/**
+ * GET /about
+ * Returns information about the Family Recipe project and developers.
+ */
+router.get("/about", (req, res) => {
+  res.json({
+    summary: "This project is all about family. Allowing you to store your traditional family recipes, be rest assured that with us your family would enjoy traditional meals for generations! Developed by a dedicated student team from Ben-Gurion University.",
+    team: [
+      {
+        name: "Shahaf Har-Tsvi",
+        role: "Developer",
+        contact: "hartsvis@bgu.ac.il"
+      },
+      {
+        name: "Shahar Navian",
+        role: "Developer",
+        contact: "navians@post.bgu.ac.il"
+      }
+    ],
+    previousProjects: [
+      {
+        title: "Space Invaders",
+        url: "https://wed-2023.github.io/assignment2-325895332_326307246_assignment2/"
+      },
+      {
+        title: "Varda's personal site",
+        url: "https://wed-2023.github.io/assignment1-326307246/"
+      },
+      {
+        title: "Trevor's personal site",
+        url: "https://wed-2023.github.io/325895332/"
+      }
+    ]
+  });
 });
 
 module.exports = router;
