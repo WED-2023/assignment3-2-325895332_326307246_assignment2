@@ -1,5 +1,6 @@
 require("dotenv").config();
-//#region express configures
+
+// Express and middleware setup
 var express = require("express");
 var path = require("path");
 var logger = require("morgan");
@@ -7,7 +8,7 @@ const session = require("client-sessions");
 const DButils = require("./routes/utils/DButils");
 var cors = require('cors')
 
-//CREATING DB TABLES IF DOESN'T EXIST
+// Ensure all required DB tables exist before starting the server
 DButils.createTablesIfNotExist()
   .then(() => console.log("Database tables checked/created."))
   .catch(err => {
@@ -16,56 +17,56 @@ DButils.createTablesIfNotExist()
   });
 
 var app = express();
-app.use(logger("dev")); //logger
-app.use(express.json()); // parse application/json
+
+// HTTP request logger
+app.use(logger("dev"));
+
+// Parse JSON request bodies
+app.use(express.json());
+
+// Session configuration
 app.use(
   session({
-    cookieName: "session", // the cookie key name
-    //secret: process.env.COOKIE_SECRET, // the encryption key
-    secret: "template", // the encryption key
-    duration: 24 * 60 * 60 * 1000, // expired after 20 sec
-    activeDuration: 1000 * 60 * 5, // if expiresIn < activeDuration,
+    cookieName: "session",
+    secret: "template",
+    duration: 24 * 60 * 60 * 1000,
+    activeDuration: 1000 * 60 * 5,
     cookie: {
       httpOnly: false,
     }
-    //the session will be extended by activeDuration milliseconds
   })
 );
-app.use(express.urlencoded({ extended: false })); // parse application/x-www-form-urlencoded
-app.use(express.static(path.join(__dirname, "public"))); //To serve static files such as images, CSS files, and JavaScript files
-//local:
+
+// Parse URL-encoded request bodies
+app.use(express.urlencoded({ extended: false }));
+
+// Serve static files from 'public' and 'dist' directories
+app.use(express.static(path.join(__dirname, "public")));
 app.use(express.static(path.join(__dirname, "dist")));
-//remote:
-// app.use(express.static(path.join(__dirname, '../assignment-3-3-frontend/dist')));
 
-app.get("/",function(req,res)
-{ 
-  //remote: 
-  // res.sendFile(path.join(__dirname, '../assignment-3-3-frontend/dist/index.html'));
-  //local:
-  res.sendFile(__dirname+"/index.html");
-
+// Serve the main HTML file for the root path
+app.get("/", function(req, res) {
+  res.sendFile(__dirname + "/index.html");
 });
 
+// Uncomment below to enable CORS if needed
 // app.use(cors());
 // app.options("*", cors());
 
-// const corsConfig = {
-//   origin: true,
-//   credentials: true
-// };
-
+// Uncomment and adjust for custom CORS configuration
+// const corsConfig = { origin: true, credentials: true };
 // app.use(cors(corsConfig));
 // app.options("*", cors(corsConfig));
 
-var port = process.env.PORT || "3000"; //local=3000 remote=80
-//#endregion
+// Set server port (default 3000 for local, 80 for remote)
+var port = process.env.PORT || "3000";
+
+// Import route modules
 const user = require("./routes/user");
 const recipes = require("./routes/recipes");
 const auth = require("./routes/auth");
 
-
-//#region cookie middleware
+// Middleware to attach user_id to request if session is valid
 app.use(function (req, res, next) {
   if (req.session && req.session.user_id) {
     DButils.execQuery("SELECT user_id FROM users")
@@ -80,33 +81,27 @@ app.use(function (req, res, next) {
     next();
   }
 });
-//#endregion
 
-// ----> For cheking that our server is alive
+// Health check endpoint
 app.get("/alive", (req, res) => res.send("I'm alive"));
 
-// Routings
+// Register route handlers
 app.use("/users", user);
 app.use("/recipes", recipes);
 app.use("/", auth);
 
-
-
-
-
-
-// Default router
+// Error handler for all routes
 app.use(function (err, req, res, next) {
   console.error(err);
   res.status(err.status || 500).send({ message: err.message, success: false });
 });
 
-
-
+// Start the server
 const server = app.listen(port, () => {
   console.log(`Server listen on port ${port}`);
 });
 
+// Graceful shutdown on SIGINT
 process.on("SIGINT", function () {
   if (server) {
     server.close(() => console.log("server closed"));

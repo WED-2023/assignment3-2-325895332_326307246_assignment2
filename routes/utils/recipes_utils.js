@@ -1,25 +1,22 @@
-// recipes_utils.js
 const axios = require("axios");
 const DButils = require("./DButils");
 const api_domain = "https://api.spoonacular.com/recipes";
 const api_key = process.env.SPOONACULAR_API_KEY;
-console.log("Loaded Spoonacular API key:", api_key);
+
 /**
- * שולף את המידע של מתכון, חיצוני או משפחתי
- * @param {string|number} recipe_id
- * @param {boolean} [isSpoonacular=true] – true לקרוא ל-API, false ל־DB
- * @returns {Promise<{ data: object }>} – תמיד מחזיר אובייקט עם המפתח .data
+ * Retrieves recipe information from Spoonacular API or local DB.
+ * @param {string|number} recipe_id - The recipe's ID.
+ * @param {boolean} [isSpoonacular=false] - If true, fetch from Spoonacular; else from DB.
+ * @returns {Promise<{ data: object }>} - Object with .data property containing recipe info.
+ * @throws {object} If recipe_id is invalid or not found.
  */
 async function getRecipeInformation(recipe_id, isSpoonacular = false) {
-  // --------------------------------------------------------
-  //  מתכונים מקומיים – שליפה מה-DB
-  // --------------------------------------------------------
   if (!isSpoonacular) {
+    // Fetch from local DB
     const id = parseInt(recipe_id, 10);
     if (Number.isNaN(id)) {
       throw { status: 400, message: "recipe_id must be numeric for DB source" };
     }
-
     const rows = await DButils.execQuery(`
       SELECT
         recipe_id AS id,
@@ -38,12 +35,9 @@ async function getRecipeInformation(recipe_id, isSpoonacular = false) {
     if (!rows.length) {
       throw { status: 404, message: "Recipe not found in DB" };
     }
-    return { data: rows[0] };                     // אחידות ל-Axios
+    return { data: rows[0] };
   }
-
-  // --------------------------------------------------------
-  //  מתכונים חיצוניים – Spoonacular API
-  // --------------------------------------------------------
+  // Fetch from Spoonacular API
   const res = await axios.get(
     `${api_domain}/${recipe_id}/information`,
     { params: { includeNutrition: false, apiKey: api_key } }
@@ -52,9 +46,10 @@ async function getRecipeInformation(recipe_id, isSpoonacular = false) {
 }
 
 /**
- * ממיר תשובת API/DB לאובייקט תצוגה מקדימה
- * @param {string|number} recipe_id
- * @param {boolean} [isSpoonacular=true]
+ * Returns a preview object for a recipe.
+ * @param {string|number} recipe_id - The recipe's ID.
+ * @param {boolean} [isSpoonacular=false] - If true, fetch from Spoonacular.
+ * @returns {Promise<object>} - Preview object.
  */
 async function getRecipePreview(recipe_id, isSpoonacular = false) {
   const res = await getRecipeInformation(recipe_id, isSpoonacular);
@@ -79,9 +74,10 @@ async function getRecipePreview(recipe_id, isSpoonacular = false) {
 }
 
 /**
- * מקבילית: תצוגות מקדימות למערך IDs
- * @param {Array<string|number>} recipe_ids_array
- * @param {boolean} [isSpoonacular=true]
+ * Returns preview objects for an array of recipe IDs.
+ * @param {Array<string|number>} recipe_ids_array - Array of recipe IDs.
+ * @param {boolean} [isSpoonacular=false] - If true, fetch from Spoonacular.
+ * @returns {Promise<Array<object>>}
  */
 async function getRecipesPreview(recipe_ids_array, isSpoonacular = false) {
   return Promise.all(
@@ -90,16 +86,15 @@ async function getRecipesPreview(recipe_ids_array, isSpoonacular = false) {
 }
 
 /**
- * מחזיר פירוט מלא של מתכון, חיצוני או משפחתי
- * @param {string|number} recipe_id
- * @param {boolean} [isSpoonacular=true]
+ * Returns detailed information for a recipe.
+ * @param {string|number} recipe_id - The recipe's ID.
+ * @param {boolean} [isSpoonacular=false] - If true, fetch from Spoonacular.
+ * @returns {Promise<object>} - Detailed recipe object.
  */
 async function getRecipeDetails(recipe_id, isSpoonacular = false) {
-  // השימוש ב־getRecipeInformation יחזיר תמיד אובייקט עם .data
   const res = await getRecipeInformation(recipe_id, isSpoonacular);
-
-  // במקרה חיצוני – extendedIngredients ועוד
   if (isSpoonacular) {
+    // Spoonacular: extract ingredients and instructions
     const {
       id, title, readyInMinutes, image,
       vegan, vegetarian, glutenFree, servings,
@@ -122,8 +117,7 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
       instructions
     };
   }
-
-  // במקרה משפחתי – כבר קיבלנו מ-DB את השדות הבסיסיים
+  // Local DB: fetch ingredients from Ingredients table
   const {
     id,
     title,
@@ -135,15 +129,12 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
     servings,
     instructions
   } = res.data;
-
-  // שולפים את רשימת החומרים מטבלת Ingredients
   const ingRows = await DButils.execQuery(`
     SELECT quantity, name
       FROM Ingredients
      WHERE recipe_id = ${recipe_id}
   `);
   const ingredients = ingRows.map(i => `${i.quantity} ${i.name}`);
-
   return {
     id,
     title,
@@ -154,12 +145,18 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
     glutenFree: Boolean(glutenFree),
     servings,
     ingredients,
-    instructions: instructions.split("\n") // או שמותאם לפי איך שמירתם בעמודה
+    instructions: instructions.split("\n")
   };
 }
 
 /**
- * חיפוש מתכונים חיצוניים לפי שם וסינונים
+ * Searches for recipes using Spoonacular API with filters.
+ * @param {string} query - Search query.
+ * @param {number} [number=5] - Number of results.
+ * @param {string|string[]} [cuisine] - Cuisine filter.
+ * @param {string|string[]} [diet] - Diet filter.
+ * @param {string|string[]} [intolerances] - Intolerances filter.
+ * @returns {Promise<Array<object>>} - Array of recipe previews.
  */
 async function searchRecipes(query, number = 5, cuisine, diet, intolerances) {
   const params = { query, number, addRecipeInformation: true, apiKey: api_key };
@@ -179,7 +176,9 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances) {
 }
 
 /**
- * מחזיר N מתכונים אקראיים
+ * Returns N random recipes from Spoonacular API.
+ * @param {number} [number=10] - Number of random recipes.
+ * @returns {Promise<Array<object>>} - Array of recipe previews.
  */
 async function getRandomRecipes(number = 10) {
   const response = await axios.get(`${api_domain}/random`, {
@@ -197,18 +196,10 @@ async function getRandomRecipes(number = 10) {
 }
 
 /**
- * יוצר מתכון חדש בבסיס-הנתונים ומחזיר את ה-ID שלו.
- * @param {number} user_id          – מזהה המשתמש היוצר
- * @param {object} data             – פרטי המתכון (ראה פירוט למטה)
- * @returns {Promise<number>}       – recipe_id שנוצר
- *
- *  data = {
- *    title, image, readyInMinutes, popularity,
- *    vegan, vegetarian, glutenFree, servings,
- *    instructions (string  \n-separated),
- *    ingredients   (Array<{ name, quantity } | string>),
- *    isFamilyRecipe, familyStory: { who, when }
- *  }
+ * Creates a new recipe in the local database and returns its ID.
+ * @param {number} user_id - The creator's user ID.
+ * @param {object} data - Recipe data.
+ * @returns {Promise<number>} - The created recipe's ID.
  */
 async function createRecipe(user_id, data) {
   const {
@@ -224,14 +215,10 @@ async function createRecipe(user_id, data) {
     isFamilyRecipe  = false,
     familyStory     = {}
   } = data;
-
-  // פירוק סיפור משפחתי אם נשלח
+  // Extract family story fields if needed
   const familyWho  = isFamilyRecipe ? familyStory.who  || null : null;
   const familyWhen = isFamilyRecipe ? familyStory.when || null : null;
-
-  /*---------------------------------------------------------------------------
-    1. הכנסת רשומת מתכון לטבלת Recipes
-  ---------------------------------------------------------------------------*/
+  // Insert recipe into Recipes table
   const insertRecipeSQL = `
     INSERT INTO Recipes
       (user_id, title, image, preparationTimeMinutes, 
@@ -248,24 +235,16 @@ async function createRecipe(user_id, data) {
        )
   `;
   const result = await DButils.execQuery(insertRecipeSQL);
-  const recipe_id = result.insertId;                 // LAST_INSERT_ID() :contentReference[oaicite:0]{index=0}
-
-  /*---------------------------------------------------------------------------
-    2. הכנסת מרכיבים לטבלת Ingredients
-       ingredients יכול להיות:
-       •  [{ name: "Flour", quantity: "2 cups" }, ...]
-       •  ["2 cups Flour", "1 tsp Salt", ...]
-  ---------------------------------------------------------------------------*/
+  const recipe_id = result.insertId;
+  // Prepare ingredient values for batch insert
   const ingValues = ingredients.map(ing => {
     if (typeof ing === "string") {
-      // מחרוזת שלמה – נפריד לשתי עמודות על-פי הרווח הראשון
       const [qty, ...rest] = ing.trim().split(" ");
       return `(${recipe_id}, '${rest.join(" ")}', '${qty}')`;
     }
-    // אובייקט quantity + name
     return `(${recipe_id}, '${ing.name}', '${ing.quantity}')`;
   });
-
+  // Insert ingredients into Ingredients table
   if (ingValues.length) {
     const insertIngSQL = `
       INSERT INTO Ingredients (recipe_id, name, quantity)
@@ -273,7 +252,6 @@ async function createRecipe(user_id, data) {
     `;
     await DButils.execQuery(insertIngSQL);
   }
-
   return recipe_id;
 }
 

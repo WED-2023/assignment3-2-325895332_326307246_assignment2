@@ -1,25 +1,32 @@
 const DButils = require("./DButils");
 
 
-
+/**
+ * Marks a recipe as favorite for a user.
+ * @param {string|number} user_id - The user's ID.
+ * @param {string|number} recipe_id - The recipe's ID.
+ * @param {boolean} [isSpoonacular=true] - Whether the recipe is from Spoonacular.
+ * @throws {object} If recipe_id is invalid or isSpoonacular is not boolean.
+ */
 async function markAsFavorite(user_id, recipe_id, isSpoonacular = true) {
-  // ולידציה בסיסית למניעת רשומות ריקות / לא תקינות
+  // Validate input
   if (recipe_id === undefined || recipe_id === null || recipe_id === "") {
     throw { status: 400, message: "recipeId is required" };
   }
   if (typeof isSpoonacular !== "boolean") {
     throw { status: 400, message: "isSpoonacular flag must be boolean" };
   }
-
+  // Insert or update favorite recipe
   await DButils.execQuery(`
     INSERT INTO FavoriteRecipes (user_id, recipe_id, isSpoonacular)
     VALUES ('${user_id}', '${recipe_id}', ${isSpoonacular ? 1 : 0})
     ON DUPLICATE KEY UPDATE created_at = created_at
   `);
 }
+
 /**
- * מחזיר את המתכונים המועדפים
- * @param {string} user_id
+ * Retrieves all favorite recipes for a user.
+ * @param {string|number} user_id - The user's ID.
  * @returns {Promise<Array<{recipe_id: string, isSpoonacular: boolean}>>}
  */
 async function getFavoriteRecipes(user_id) {
@@ -32,13 +39,13 @@ async function getFavoriteRecipes(user_id) {
 }
 
 /**
- * רושם צפייה בטבלת LastWatchedRecipes
- * עם עדכון watched_at על כפילות
- * @param {string} user_id
- * @param {string|number} recipe_id
- * @param {boolean} [isSpoonacular=true]
+ * Marks a recipe as watched for a user.
+ * @param {string|number} user_id - The user's ID.
+ * @param {string|number} recipe_id - The recipe's ID.
+ * @param {boolean} [isSpoonacular=true] - Whether the recipe is from Spoonacular.
  */
 async function markAsWatched(user_id, recipe_id, isSpoonacular = true) {
+  // Insert or update last watched recipe
   await DButils.execQuery(`
     INSERT INTO LastWatchedRecipes (user_id, recipe_id, isSpoonacular)
     VALUES ('${user_id}', '${recipe_id}', ${isSpoonacular ? 1 : 0})
@@ -48,24 +55,22 @@ async function markAsWatched(user_id, recipe_id, isSpoonacular = true) {
 }
 
 /**
- * מחזיר את הצפיות האחרונות (מסוננות אופציונלית לפי isSpoonacular).
- * @param {string}  user_id
- * @param {number}  limit            – מספר מקס’ רשומות (אופציונלי)
- * @param {boolean} [isSpoonacular]  – אם לא נשלח ⇒ ללא סינון
+ * Retrieves the last watched recipes for a user, optionally filtered by source.
+ * @param {string|number} user_id - The user's ID.
+ * @param {number} [limit] - Maximum number of records to return.
+ * @param {boolean} [isSpoonacular] - Filter by Spoonacular source.
+ * @returns {Promise<Array<{recipe_id: string, isSpoonacular: boolean}>>}
  */
 async function getLastWatchedRecipes(user_id, limit, isSpoonacular) {
   let query = `
     SELECT recipe_id, isSpoonacular
       FROM LastWatchedRecipes
      WHERE user_id='${user_id}'`;
-
   if (typeof isSpoonacular === "boolean") {
     query += ` AND isSpoonacular=${isSpoonacular ? 1 : 0}`;
   }
-
   query += " ORDER BY watched_at DESC";
   if (limit) query += ` LIMIT ${limit}`;
-
   return DButils.execQuery(query);
 };
 

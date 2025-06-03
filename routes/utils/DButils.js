@@ -1,6 +1,12 @@
 require("dotenv").config();
 const MySql = require("./MySql");
 
+/**
+ * Executes a SQL query within a transaction.
+ * @param {string} query - The SQL query to execute.
+ * @returns {Promise<any>} - The result of the query.
+ * @throws {Error} If the query fails.
+ */
 exports.execQuery = async function (query) {
     let returnValue = []
     const connection = await MySql.connection();
@@ -9,7 +15,6 @@ exports.execQuery = async function (query) {
     returnValue = await connection.query(query);
   } catch (err) {
     await connection.query("ROLLBACK");
-    console.log('ROLLBACK at querySignUp', err);
     throw err;
   } finally {
     await connection.release();
@@ -17,12 +22,16 @@ exports.execQuery = async function (query) {
   return returnValue
 }
 
-//CREATING TABLES OF DB
+/**
+ * Creates all required database tables if they do not exist.
+ * Uses a transaction to ensure atomicity.
+ * @returns {Promise<void>}
+ * @throws {Error} If table creation fails.
+ */
 exports.createTablesIfNotExist = async function () {
   const connection = await MySql.connection();
   try {
     await connection.query("START TRANSACTION");
-
     // Users table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -37,8 +46,7 @@ exports.createTablesIfNotExist = async function () {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-
-    // Recipes table (user and family recipes, not Spoonacular)
+    // Recipes table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS Recipes (
         recipe_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -58,8 +66,7 @@ exports.createTablesIfNotExist = async function () {
         FOREIGN KEY (user_id) REFERENCES users(user_id)
       )
     `);
-
-    // Ingredients table (for user/family recipes)
+    // Ingredients table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS Ingredients (
         ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -69,8 +76,7 @@ exports.createTablesIfNotExist = async function () {
         FOREIGN KEY (recipe_id) REFERENCES Recipes(recipe_id)
       )
     `);
-
-    // FavoriteRecipes table (references Spoonacular by string ID, or Recipes by INT ID)
+    // FavoriteRecipes table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS FavoriteRecipes (
         user_id INT,
@@ -81,8 +87,7 @@ exports.createTablesIfNotExist = async function () {
         FOREIGN KEY (user_id) REFERENCES users(user_id)
       )
     `);
-
-    // LastWatchedRecipes table (references Spoonacular by string ID, or Recipes by INT ID)
+    // LastWatchedRecipes table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS LastWatchedRecipes (
         user_id INT,
@@ -93,11 +98,9 @@ exports.createTablesIfNotExist = async function () {
         FOREIGN KEY (user_id) REFERENCES users(user_id)
       )
     `);
-
     await connection.query("COMMIT");
   } catch (err) {
     await connection.query("ROLLBACK");
-    console.log('ROLLBACK at createTablesIfNotExist', err);
     throw err;
   } finally {
     await connection.release();
