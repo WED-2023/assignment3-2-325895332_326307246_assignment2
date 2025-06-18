@@ -54,9 +54,9 @@ app.get("/", function(req, res) {
 // app.options("*", cors());
 
 // Uncomment and adjust for custom CORS configuration
-// const corsConfig = { origin: true, credentials: true };
-// app.use(cors(corsConfig));
-// app.options("*", cors(corsConfig));
+const corsConfig = { origin: true, credentials: true };
+app.use(cors(corsConfig));
+app.options("*", cors(corsConfig));
 
 // Set server port (default 3000 for local, 80 for remote)
 var port = process.env.PORT || "3000";

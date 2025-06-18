@@ -1,9 +1,39 @@
-var express = require("express");
+﻿var express = require("express");
 var router = express.Router();
 const MySql = require("../routes/utils/MySql");
 const DButils = require("../routes/utils/DButils");
 const bcrypt = require("bcrypt");
 const axios = require("axios");
+
+const EXCLUDE = ["Palestine", "Iran"];
+
+let cachedCountries = { list: [], fetchedAt: 0 };
+const COUNTRIES_TTL = 24 * 60 * 60 * 1000; // 24 שעות
+
+async function getCountries() {
+  const now = Date.now();
+  if (cachedCountries.list.length && now - cachedCountries.fetchedAt < COUNTRIES_TTL) {
+    return cachedCountries.list;
+  }
+
+  const res = await axios.get("https://restcountries.com/v3.1/all?fields=name");
+  cachedCountries.list = res.data
+    .map(c => c.name.common)
+    .filter(name => !EXCLUDE.includes(name))
+    .sort((a, b) => a.localeCompare(b));
+
+  cachedCountries.fetchedAt = now;
+  return cachedCountries.list;
+}
+
+
+router.get("/countries", async (req, res, next) => {
+    try {
+        res.json(await getCountries());
+    } catch (err) {
+        next(err);
+    }
+});
 
 router.post("/Register", async (req, res, next) => {
   try {
@@ -58,9 +88,8 @@ router.post("/Register", async (req, res, next) => {
       throw { status: 400, message: "Invalid email format." };
     }
 
-    // Validate country using REST Countries API
-    const countriesResponse = await axios.get("https://restcountries.com/v3.1/all");
-    const countries = countriesResponse.data.map(c => c.name.common);
+      // Validate country using REST Countries API
+    const countries = await getCountries();
     if (!countries.includes(user_details.country)) {
       throw { status: 400, message: "Invalid country." };
     }
