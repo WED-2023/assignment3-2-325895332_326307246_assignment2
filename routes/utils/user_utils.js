@@ -2,6 +2,47 @@ const DButils = require("./DButils");
 
 
 /**
+ * Toggles a recipe as favorite for a user (add if not exists, remove if exists).
+ * @param {string|number} user_id - The user's ID.
+ * @param {string|number} recipe_id - The recipe's ID.
+ * @param {boolean} [isSpoonacular=true] - Whether the recipe is from Spoonacular.
+ * @returns {Promise<boolean>} - True if added to favorites, false if removed.
+ * @throws {object} If recipe_id is invalid or isSpoonacular is not boolean.
+ */
+async function toggleFavorite(user_id, recipe_id, isSpoonacular = true) {
+  // Validate input
+  if (
+    user_id === undefined || user_id === null || user_id === "" ||
+    recipe_id === undefined || recipe_id === null || recipe_id === "" ||
+    typeof isSpoonacular !== "boolean"
+  ) {
+    throw { status: 400, message: "Invalid input for toggling favorite" };
+  }
+
+  // Check if recipe is already in favorites
+  const existing = await DButils.execQuery(`
+    SELECT 1 FROM FavoriteRecipes 
+    WHERE user_id='${user_id}' AND recipe_id='${recipe_id}' AND isSpoonacular=${isSpoonacular ? 1 : 0}
+  `);
+
+  if (existing.length > 0) {
+    // Remove from favorites
+    await DButils.execQuery(`
+      DELETE FROM FavoriteRecipes 
+      WHERE user_id='${user_id}' AND recipe_id='${recipe_id}' AND isSpoonacular=${isSpoonacular ? 1 : 0}
+    `);
+    return false; // Removed from favorites
+  } else {
+    // Add to favorites
+    await DButils.execQuery(`
+      INSERT INTO FavoriteRecipes (user_id, recipe_id, isSpoonacular)
+      VALUES ('${user_id}', '${recipe_id}', ${isSpoonacular ? 1 : 0})
+    `);
+    return true; // Added to favorites
+  }
+}
+
+/**
  * Marks a recipe as favorite for a user.
  * @param {string|number} user_id - The user's ID.
  * @param {string|number} recipe_id - The recipe's ID.
@@ -96,6 +137,7 @@ async function getLastWatchedRecipes(user_id, limit, isSpoonacular) {
 };
 
 module.exports = {
+  toggleFavorite,
   markAsFavorite,
   getFavoriteRecipes,
   markAsWatched,

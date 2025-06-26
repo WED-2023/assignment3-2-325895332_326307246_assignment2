@@ -22,7 +22,7 @@ router.use(async function (req, res, next) {
 });
 
 /**
- * Add a recipe to the favorites list of the logged-in user.
+ * Toggle a recipe in the favorites list of the logged-in user.
  * Expects: { recipeId, isSpoonacular } in req.body
  */
 router.post('/favorites', async (req,res,next) => {
@@ -45,8 +45,12 @@ router.post('/favorites', async (req,res,next) => {
       throw { status: 404, message: "Recipe not found" };
     }
     
-    await user_utils.markAsFavorite(user_id, recipeId, isSpoonacular);
-    res.status(200).send("The Recipe successfully saved as favorite");
+    const isNowFavorite = await user_utils.toggleFavorite(user_id, recipeId, isSpoonacular);
+    const message = isNowFavorite ? 
+      "The Recipe successfully added to favorites" : 
+      "The Recipe successfully removed from favorites";
+    
+    res.status(200).send({ message, isFavorite: isNowFavorite, success: true });
     } catch(error){
     next(error);
   }

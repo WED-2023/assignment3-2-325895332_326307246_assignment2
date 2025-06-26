@@ -83,7 +83,8 @@ async function getRecipePreview(recipe_id, isSpoonacular = false) {
     image,
     vegan,
     vegetarian,
-    glutenFree
+    glutenFree,
+    isSpoonacular // Add this property to ensure it's always present
   };
 }
 

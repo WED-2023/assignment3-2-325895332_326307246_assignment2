@@ -18,18 +18,40 @@ router.get("/", async (req, res, next) => {
     // Always show 3 random Spoonacular recipes
     payload.random = await recipes_utils.getRandomRecipes(3);
 
+    // If user is logged in, check their favorites and add to random recipes
     if (req.session?.user_id) {
-      // User is logged in: show last watched
-      const watchedRows = await user_utils.getLastWatchedRecipes(
-        req.session.user_id,
-        3
-      );
+      const uid = req.session.user_id;
+      const favorites = await user_utils.getFavoriteRecipes(uid);
+      
+      // Mark favorites in random recipes
+      payload.random = payload.random.map(recipe => ({
+        ...recipe,
+        isSpoonacular: true,
+        isFavorite: favorites.some(fav => 
+          fav.recipe_id == recipe.id && Boolean(fav.isSpoonacular) === true
+        )
+      }));
+
+      // Get last watched recipes
+      const watchedRows = await user_utils.getLastWatchedRecipes(uid, 3);
       if (watchedRows.length) {
-        payload.lastWatched = await Promise.all(
+        const lastWatchedPreviews = await Promise.all(
           watchedRows.map(w =>
             recipes_utils.getRecipePreview(w.recipe_id, Boolean(w.isSpoonacular))
           )
         );
+        
+        // Mark favorites and isSpoonacular in last watched recipes
+        payload.lastWatched = lastWatchedPreviews.map((recipe, index) => {
+          const originalWatched = watchedRows[index];
+          return {
+            ...recipe,
+            isSpoonacular: Boolean(originalWatched.isSpoonacular),
+            isFavorite: favorites.some(fav => 
+              fav.recipe_id == recipe.id && Boolean(fav.isSpoonacular) === Boolean(originalWatched.isSpoonacular)
+            )
+          };
+        });
       }
     } else {
       // User is not logged in: show login option
@@ -167,34 +189,36 @@ router.get("/search", async (req, res, next) => {
 router.get("/:recipeId", async (req, res, next) => {
   try {
     const { recipeId } = req.params;
-    const  source      = (req.query.source || "").toLowerCase();
+    let source = (req.query.source || "spoon").toLowerCase();
 
     // Input validation
     if (!recipeId || typeof recipeId !== "string" && typeof recipeId !== "number") {
       return res.status(400).send({ message: "Invalid recipeId" });
     }
+    
+    // Default to spoon if source is not valid
     if (!["db", "spoon"].includes(source)) {
-      return res.status(400).send({
-        message: "query-param 'source' must be 'db' or 'spoon'"
-      });
+      source = "spoon";
     }
+    
     const isSpoonacular = source === "spoon";
 
-    // 2. שליפת פרטי-מתכון ממקור מוגדר
+    // Get recipe details
     const recipe = await recipes_utils.getRecipeDetails(recipeId, isSpoonacular);
-    recipe.source = source;                    // מוסיפים לשקיפות ל-frontend
+    recipe.source = source;
+    recipe.isSpoonacular = isSpoonacular;
 
-    // 3. פעולות תלויות-משתמש: Watched + Favorite
+    // User-dependent operations: Watched + Favorite
     if (req.session?.user_id) {
       const uid = req.session.user_id;
 
-      // צפייה אחרונה (שומר גם isSpoonacular בטבלה)
+      // Mark as watched
       await user_utils.markAsWatched(uid, recipeId, isSpoonacular);
 
-      // בדיקת מועדפים עם אותו צירוף (id + מקור)
-      const favs = await user_utils.getFavoriteRecipes(uid, isSpoonacular);
+      // Check if favorite
+      const favs = await user_utils.getFavoriteRecipes(uid);
       recipe.isFavorite = favs.some(
-        r => r.recipe_id == recipeId && r.isSpoonacular === isSpoonacular
+        r => r.recipe_id == recipeId && Boolean(r.isSpoonacular) === isSpoonacular
       );
       recipe.isWatched = true;
     }
@@ -204,6 +228,5 @@ router.get("/:recipeId", async (req, res, next) => {
     next(err);
   }
 });
-
 
 module.exports = router;
