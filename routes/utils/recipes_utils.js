@@ -283,6 +283,8 @@ async function createRecipe(user_id, data) {
   }
   const familyWho  = isFamilyRecipe ? familyStory.who  || null : null;
   const familyWhen = isFamilyRecipe ? familyStory.when || null : null;
+  // Store instructions as a single string with line breaks
+  const instructionsString = Array.isArray(instructions) ? instructions.join('\n') : '';
   const insertRecipeSQL = `
     INSERT INTO Recipes
       (user_id, title, image, preparationTimeMinutes, 
@@ -292,7 +294,7 @@ async function createRecipe(user_id, data) {
       ('${user_id}', '${title}', ${image ? `'${image}'` : null},
        ${readyInMinutes},
        ${vegan ? 1 : 0}, ${vegetarian ? 1 : 0}, ${glutenFree ? 1 : 0},
-       ${servings}, '${instructions}',
+       ${servings}, '${instructionsString}',
        ${isFamilyRecipe ? 1 : 0},
        ${familyWho  ? `'${familyWho}'`  : null},
        ${familyWhen ? `'${familyWhen}'` : null}
