@@ -55,9 +55,10 @@ async function getRecipeInformation(recipe_id, isSpoonacular = false) {
  * Returns a preview object for a recipe.
  * @param {string|number} recipe_id - The recipe's ID.
  * @param {boolean} [isSpoonacular=false] - If true, fetch from Spoonacular.
+ * @param {string|number} [user_id=null] - The user's ID for checking watched status.
  * @returns {Promise<object>} - Preview object.
  */
-async function getRecipePreview(recipe_id, isSpoonacular = false) {
+async function getRecipePreview(recipe_id, isSpoonacular = false, user_id = null) {
   if (
     recipe_id === undefined ||
     recipe_id === null ||
@@ -76,6 +77,27 @@ async function getRecipePreview(recipe_id, isSpoonacular = false) {
     vegetarian,
     glutenFree
   } = res.data;
+
+  let isWatched = false;
+  if (user_id) {
+    // Check if the user has watched this recipe
+    const watchedQuery = `
+      SELECT 1 FROM LastWatchedRecipes 
+      WHERE user_id = ? AND recipe_id = ? AND isSpoonacular = ?
+      LIMIT 1
+    `;
+    try {
+      const connection = await require("./MySql").connection();
+      const params = [user_id, recipe_id, isSpoonacular ? 1 : 0];
+      const result = await connection.query(watchedQuery, params);
+      await connection.release();
+      isWatched = result.length > 0;
+    } catch (error) {
+      console.error("Error checking watched status:", error);
+      isWatched = false;
+    }
+  }
+
   return {
     id,
     title,
@@ -84,7 +106,8 @@ async function getRecipePreview(recipe_id, isSpoonacular = false) {
     vegan,
     vegetarian,
     glutenFree,
-    isSpoonacular // Add this property to ensure it's always present
+    isSpoonacular,
+    isWatched: isWatched
   };
 }
 
@@ -92,9 +115,10 @@ async function getRecipePreview(recipe_id, isSpoonacular = false) {
  * Returns preview objects for an array of recipe IDs.
  * @param {Array<string|number>} recipe_ids_array - Array of recipe IDs.
  * @param {boolean} [isSpoonacular=false] - If true, fetch from Spoonacular.
+ * @param {string|number} [user_id=null] - The user's ID for checking watched status.
  * @returns {Promise<Array<object>>}
  */
-async function getRecipesPreview(recipe_ids_array, isSpoonacular = false) {
+async function getRecipesPreview(recipe_ids_array, isSpoonacular = false, user_id = null) {
   if (
     !Array.isArray(recipe_ids_array) ||
     recipe_ids_array.length === 0 ||
@@ -103,7 +127,7 @@ async function getRecipesPreview(recipe_ids_array, isSpoonacular = false) {
     throw { status: 400, message: "Invalid recipe_ids_array or isSpoonacular" };
   }
   return Promise.all(
-    recipe_ids_array.map(id => getRecipePreview(id, isSpoonacular))
+    recipe_ids_array.map(id => getRecipePreview(id, isSpoonacular, user_id))
   );
 }
 
@@ -111,9 +135,10 @@ async function getRecipesPreview(recipe_ids_array, isSpoonacular = false) {
  * Returns detailed information for a recipe.
  * @param {string|number} recipe_id - The recipe's ID.
  * @param {boolean} [isSpoonacular=false] - If true, fetch from Spoonacular.
+ * @param {string|number} [user_id=null] - The user's ID for checking watched status.
  * @returns {Promise<object>} - Detailed recipe object.
  */
-async function getRecipeDetails(recipe_id, isSpoonacular = false) {
+async function getRecipeDetails(recipe_id, isSpoonacular = false, user_id = null) {
   if (
     recipe_id === undefined ||
     recipe_id === null ||
@@ -123,6 +148,27 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
     throw { status: 400, message: "Invalid recipe_id or isSpoonacular" };
   }
   const res = await getRecipeInformation(recipe_id, isSpoonacular);
+  
+  let isWatched = false;
+  if (user_id) {
+    // Check if the user has watched this recipe
+    const watchedQuery = `
+      SELECT 1 FROM LastWatchedRecipes 
+      WHERE user_id = ? AND recipe_id = ? AND isSpoonacular = ?
+      LIMIT 1
+    `;
+    try {
+      const connection = await require("./MySql").connection();
+      const params = [user_id, recipe_id, isSpoonacular ? 1 : 0];
+      const result = await connection.query(watchedQuery, params);
+      await connection.release();
+      isWatched = result.length > 0;
+    } catch (error) {
+      console.error("Error checking watched status:", error);
+      isWatched = false;
+    }
+  }
+
   if (isSpoonacular) {
     const {
       id, title, readyInMinutes, image,
@@ -143,7 +189,8 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
       glutenFree,
       servings,
       ingredients,
-      instructions
+      instructions,
+      isWatched
     };
   }
   const {
@@ -173,7 +220,8 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
     glutenFree: Boolean(glutenFree),
     servings,
     ingredients,
-    instructions: instructions.split("\n")
+    instructions: instructions.split("\n"),
+    isWatched
   };
 }
 
@@ -184,9 +232,10 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false) {
  * @param {string|string[]} [cuisine] - Cuisine filter.
  * @param {string|string[]} [diet] - Diet filter.
  * @param {string|string[]} [intolerances] - Intolerances filter.
+ * @param {string|number} [user_id=null] - The user's ID for checking watched status.
  * @returns {Promise<Array<object>>} - Array of recipe previews.
  */
-async function searchRecipes(query, number = 5, cuisine, diet, intolerances) {
+async function searchRecipes(query, number = 5, cuisine, diet, intolerances, user_id = null) {
   if (
     typeof query !== "string" ||
     !query.trim() ||
@@ -199,38 +248,111 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances) {
   if (diet)         params.diet         = Array.isArray(diet)         ? diet.join(',')         : diet;
   if (intolerances) params.intolerances = Array.isArray(intolerances) ? intolerances.join(',') : intolerances;
   const response = await axios.get(`${api_domain}/complexSearch`, { params });
-  return response.data.results.map(r => ({
+  
+  const recipes = response.data.results.map(r => ({
     id: r.id,
     title: r.title,
     readyInMinutes: r.readyInMinutes,
     image: r.image,
     vegan: r.vegan,
     vegetarian: r.vegetarian,
-    glutenFree: r.glutenFree
+    glutenFree: r.glutenFree,
+    isSpoonacular: true
   }));
+
+  // Add watched status if user is logged in
+  if (user_id) {
+    const recipeIds = recipes.map(r => r.id);
+    if (recipeIds.length > 0) {
+      const placeholders = recipeIds.map(() => '?').join(',');
+      const watchedQuery = `
+        SELECT recipe_id FROM LastWatchedRecipes 
+        WHERE user_id = ? AND isSpoonacular = 1 AND recipe_id IN (${placeholders})
+      `;
+      try {
+        const connection = await require("./MySql").connection();
+        const params = [user_id, ...recipeIds];
+        const watchedResult = await connection.query(watchedQuery, params);
+        await connection.release();
+        
+        const watchedSet = new Set(watchedResult.map(w => w.recipe_id.toString()));
+        recipes.forEach(recipe => {
+          recipe.isWatched = watchedSet.has(recipe.id.toString());
+        });
+      } catch (error) {
+        console.error("Error checking watched status for search results:", error);
+        recipes.forEach(recipe => {
+          recipe.isWatched = false;
+        });
+      }
+    }
+  } else {
+    recipes.forEach(recipe => {
+      recipe.isWatched = false;
+    });
+  }
+
+  return recipes;
 }
 
 /**
  * Returns N random recipes from Spoonacular API.
  * @param {number} [number=10] - Number of random recipes.
+ * @param {string|number} [user_id=null] - The user's ID for checking watched status.
  * @returns {Promise<Array<object>>} - Array of recipe previews.
  */
-async function getRandomRecipes(number = 10) {
+async function getRandomRecipes(number = 10, user_id = null) {
   if (number !== undefined && (typeof number !== "number" || number <= 0)) {
     throw { status: 400, message: "Invalid number for random recipes" };
   }
   const response = await axios.get(`${api_domain}/random`, {
     params: { number, apiKey: api_key }
   });
-  return response.data.recipes.map(r => ({
+  
+  const recipes = response.data.recipes.map(r => ({
     id: r.id,
     title: r.title,
     readyInMinutes: r.readyInMinutes,
     image: r.image,
     vegan: r.vegan,
     vegetarian: r.vegetarian,
-    glutenFree: r.glutenFree
+    glutenFree: r.glutenFree,
+    isSpoonacular: true
   }));
+
+  // Add watched status if user is logged in
+  if (user_id) {
+    const recipeIds = recipes.map(r => r.id);
+    if (recipeIds.length > 0) {
+      const placeholders = recipeIds.map(() => '?').join(',');
+      const watchedQuery = `
+        SELECT recipe_id FROM LastWatchedRecipes 
+        WHERE user_id = ? AND isSpoonacular = 1 AND recipe_id IN (${placeholders})
+      `;
+      try {
+        const connection = await require("./MySql").connection();
+        const params = [user_id, ...recipeIds];
+        const watchedResult = await connection.query(watchedQuery, params);
+        await connection.release();
+        
+        const watchedSet = new Set(watchedResult.map(w => w.recipe_id.toString()));
+        recipes.forEach(recipe => {
+          recipe.isWatched = watchedSet.has(recipe.id.toString());
+        });
+      } catch (error) {
+        console.error("Error checking watched status for random recipes:", error);
+        recipes.forEach(recipe => {
+          recipe.isWatched = false;
+        });
+      }
+    }
+  } else {
+    recipes.forEach(recipe => {
+      recipe.isWatched = false;
+    });
+  }
+
+  return recipes;
 }
 
 /**

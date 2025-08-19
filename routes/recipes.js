@@ -14,14 +14,14 @@ const user_utils    = require("./utils/user_utils");
 router.get("/", async (req, res, next) => {
   try {
     const payload = { random: [], lastWatched: [] };
+    const user_id = req.session?.user_id || null;
 
     // Always show 3 random Spoonacular recipes
-    payload.random = await recipes_utils.getRandomRecipes(3);
+    payload.random = await recipes_utils.getRandomRecipes(3, user_id);
 
     // If user is logged in, check their favorites and add to random recipes
-    if (req.session?.user_id) {
-      const uid = req.session.user_id;
-      const favorites = await user_utils.getFavoriteRecipes(uid);
+    if (user_id) {
+      const favorites = await user_utils.getFavoriteRecipes(user_id);
       
       // Mark favorites in random recipes
       payload.random = payload.random.map(recipe => ({
@@ -33,11 +33,11 @@ router.get("/", async (req, res, next) => {
       }));
 
       // Get last watched recipes
-      const watchedRows = await user_utils.getLastWatchedRecipes(uid, 3);
+      const watchedRows = await user_utils.getLastWatchedRecipes(user_id, 3);
       if (watchedRows.length) {
         const lastWatchedPreviews = await Promise.all(
           watchedRows.map(w =>
-            recipes_utils.getRecipePreview(w.recipe_id, Boolean(w.isSpoonacular))
+            recipes_utils.getRecipePreview(w.recipe_id, Boolean(w.isSpoonacular), user_id)
           )
         );
         
@@ -160,6 +160,8 @@ router.post("/", async (req, res, next) => {
 router.get("/search", async (req, res, next) => {
   try {
     const { query, number, cuisine, diet, intolerances } = req.query;
+    const user_id = req.session?.user_id || null;
+    
     // Input validation
     if (typeof query !== "string" || !query.trim()) {
       throw { status: 400, message: "Query parameter is required" };
@@ -172,7 +174,8 @@ router.get("/search", async (req, res, next) => {
       num,
       cuisine,
       diet,
-      intolerances
+      intolerances,
+      user_id
     );
     res.status(200).send(results);
   } catch (error) {
@@ -190,6 +193,7 @@ router.get("/:recipeId", async (req, res, next) => {
   try {
     const { recipeId } = req.params;
     let source = (req.query.source || "spoon").toLowerCase();
+    const user_id = req.session?.user_id || null;
 
     // Input validation
     if (!recipeId || typeof recipeId !== "string" && typeof recipeId !== "number") {
@@ -204,19 +208,17 @@ router.get("/:recipeId", async (req, res, next) => {
     const isSpoonacular = source === "spoon";
 
     // Get recipe details
-    const recipe = await recipes_utils.getRecipeDetails(recipeId, isSpoonacular);
+    const recipe = await recipes_utils.getRecipeDetails(recipeId, isSpoonacular, user_id);
     recipe.source = source;
     recipe.isSpoonacular = isSpoonacular;
 
     // User-dependent operations: Watched + Favorite
-    if (req.session?.user_id) {
-      const uid = req.session.user_id;
-
+    if (user_id) {
       // Mark as watched
-      await user_utils.markAsWatched(uid, recipeId, isSpoonacular);
+      await user_utils.markAsWatched(user_id, recipeId, isSpoonacular);
 
       // Check if favorite
-      const favs = await user_utils.getFavoriteRecipes(uid);
+      const favs = await user_utils.getFavoriteRecipes(user_id);
       recipe.isFavorite = favs.some(
         r => r.recipe_id == recipeId && Boolean(r.isSpoonacular) === isSpoonacular
       );

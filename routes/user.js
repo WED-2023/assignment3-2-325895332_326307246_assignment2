@@ -72,13 +72,18 @@ router.get("/favorites", async (req, res, next) => {
     const localIds = allFavs.filter(r => !r.isSpoonacular);
 
     const spoonPreviews = await Promise.all(
-      spoonIds.map(r => recipe_utils.getRecipePreview(r.recipe_id, true))
+      spoonIds.map(r => recipe_utils.getRecipePreview(r.recipe_id, true, user_id))
     );
     const localPreviews = await Promise.all(
-      localIds.map(r => recipe_utils.getRecipePreview(r.recipe_id, false))
+      localIds.map(r => recipe_utils.getRecipePreview(r.recipe_id, false, user_id))
     );
 
-    res.status(200).send([...spoonPreviews, ...localPreviews]);
+    const allPreviews = [...spoonPreviews, ...localPreviews].map(recipe => ({
+      ...recipe,
+      isFavorite: true // All recipes in favorites page are favorites
+    }));
+
+    res.status(200).send(allPreviews);
   } catch (error) {
     next(error);
   }
@@ -97,7 +102,7 @@ router.get('/familyRecipes', async (req, res, next) => {
       `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}' AND isFamilyRecipe = true`
     );
     const previews = await Promise.all(
-      recipes.map(r => recipe_utils.getRecipePreview(r.recipe_id, false))
+      recipes.map(r => recipe_utils.getRecipePreview(r.recipe_id, false, user_id))
     );
     res.status(200).send(previews);
   } catch (error) {
@@ -118,7 +123,7 @@ router.get('/myRecipes', async (req, res, next) => {
       `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}'`
     );
     const previews = await Promise.all(
-      recipes.map(r => recipe_utils.getRecipePreview(r.recipe_id, false))
+      recipes.map(r => recipe_utils.getRecipePreview(r.recipe_id, false, user_id))
     );
     res.status(200).send(previews);
   } catch (error) {
