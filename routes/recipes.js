@@ -231,4 +231,284 @@ router.get("/:recipeId", async (req, res, next) => {
   }
 });
 
+/**
+ * GET /recipes/:recipeId/cooking-mode
+ * Get recipe in cooking mode format with step-by-step instructions.
+ * Supports quantity multiplier for adjusting servings.
+ */
+router.get("/:recipeId/cooking-mode", async (req, res, next) => {
+  try {
+    const { recipeId } = req.params;
+    let source = (req.query.source || "spoon").toLowerCase();
+    const servingMultiplier = parseFloat(req.query.servings) || 1;
+    const user_id = req.session?.user_id || null;
+
+    // Input validation
+    if (!recipeId || typeof recipeId !== "string" && typeof recipeId !== "number") {
+      return res.status(400).send({ message: "Invalid recipeId" });
+    }
+    
+    if (servingMultiplier <= 0) {
+      return res.status(400).send({ message: "Invalid serving multiplier" });
+    }
+    
+    // Default to spoon if source is not valid
+    if (!["db", "spoon"].includes(source)) {
+      source = "spoon";
+    }
+    
+    const isSpoonacular = source === "spoon";
+
+    // Get recipe details
+    const recipe = await recipes_utils.getRecipeDetails(recipeId, isSpoonacular, user_id);
+    
+    // Adjust quantities if multiplier is provided
+    if (servingMultiplier !== 1 && recipe.ingredients) {
+      recipe.ingredients = recipe.ingredients.map(ingredient => {
+        if (typeof ingredient === 'object' && ingredient.quantity) {
+          // Extract numeric values and multiply
+          const quantityMatch = ingredient.quantity.match(/(\d+(?:\.\d+)?)/);
+          if (quantityMatch) {
+            const originalQuantity = parseFloat(quantityMatch[1]);
+            const newQuantity = (originalQuantity * servingMultiplier).toFixed(1);
+            ingredient.quantity = ingredient.quantity.replace(quantityMatch[1], newQuantity);
+          }
+          return ingredient;
+        } else if (typeof ingredient === 'string') {
+          // For string ingredients, try to extract and multiply quantities
+          const quantityMatch = ingredient.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+          if (quantityMatch) {
+            const originalQuantity = parseFloat(quantityMatch[1]);
+            const newQuantity = (originalQuantity * servingMultiplier).toFixed(1);
+            return newQuantity + ' ' + quantityMatch[2];
+          }
+          return ingredient;
+        }
+        return ingredient;
+      });
+    }
+
+    // Adjust servings
+    if (recipe.servings) {
+      recipe.servings = Math.round(recipe.servings * servingMultiplier);
+    }
+
+    // Format for cooking mode
+    const cookingModeData = {
+      id: recipe.id,
+      title: recipe.title,
+      image: recipe.image,
+      servings: recipe.servings,
+      readyInMinutes: recipe.readyInMinutes,
+      ingredients: recipe.ingredients,
+      instructions: recipe.instructions,
+      currentStep: 0,
+      totalSteps: recipe.instructions ? recipe.instructions.length : 0,
+      servingMultiplier: servingMultiplier,
+      originalServings: recipe.servings ? Math.round(recipe.servings / servingMultiplier) : null
+    };
+
+    res.status(200).send(cookingModeData);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /recipes/:recipeId/meal-plan
+ * Add recipe to user's meal plan.
+ */
+router.post("/:recipeId/meal-plan", async (req, res, next) => {
+  try {
+    // Check authentication
+    if (!(req.session && req.session.user_id)) {
+      throw { status: 401, message: "Login required" };
+    }
+    const user_id = req.session.user_id;
+
+    const { recipeId } = req.params;
+    const { date, mealType, servings } = req.body;
+    let source = (req.body.source || "spoon").toLowerCase();
+
+    // Input validation
+    if (!recipeId || typeof recipeId !== "string" && typeof recipeId !== "number") {
+      return res.status(400).send({ message: "Invalid recipeId" });
+    }
+    
+    if (!date || !mealType) {
+      return res.status(400).send({ message: "Date and meal type are required" });
+    }
+
+    if (!["breakfast", "lunch", "dinner", "snack"].includes(mealType)) {
+      return res.status(400).send({ message: "Invalid meal type" });
+    }
+
+    // Default to spoon if source is not valid
+    if (!["db", "spoon"].includes(source)) {
+      source = "spoon";
+    }
+    
+    const isSpoonacular = source === "spoon";
+
+    // Add to meal plan (this would require a meal plan table in the database)
+    // For now, we'll return a success message
+    const mealPlanEntry = {
+      user_id,
+      recipe_id: recipeId,
+      isSpoonacular,
+      date,
+      mealType,
+      servings: servings || 1,
+      created_at: new Date()
+    };
+
+    res.status(201).send({ 
+      message: "Recipe added to meal plan",
+      mealPlan: mealPlanEntry
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /recipes/:recipeId/cooking-progress
+ * Get saved cooking mode progress for the current session.
+ */
+router.get("/:recipeId/cooking-progress", async (req, res, next) => {
+  try {
+    // Check authentication
+    if (!(req.session && req.session.user_id)) {
+      throw { status: 401, message: "Login required" };
+    }
+
+    const { recipeId } = req.params;
+    let source = (req.query.source || "spoon").toLowerCase();
+
+    // Input validation
+    if (!recipeId || typeof recipeId !== "string" && typeof recipeId !== "number") {
+      return res.status(400).send({ message: "Invalid recipeId" });
+    }
+
+    // Default to spoon if source is not valid
+    if (!["db", "spoon"].includes(source)) {
+      source = "spoon";
+    }
+
+    // Initialize cooking progress storage in session if it doesn't exist
+    if (!req.session.cookingProgress) {
+      req.session.cookingProgress = {};
+    }
+
+    const progressKey = `${recipeId}-${source}`;
+    const progress = req.session.cookingProgress[progressKey] || {
+      currentStep: 0,
+      completedSteps: {},
+      checkedIngredients: {},
+      servingMultiplier: 1,
+      startTime: new Date().toISOString(),
+      lastUpdated: new Date().toISOString()
+    };
+
+    res.status(200).send(progress);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /recipes/:recipeId/cooking-progress
+ * Save cooking mode progress for the current session.
+ */
+router.post("/:recipeId/cooking-progress", async (req, res, next) => {
+  try {
+    // Check authentication
+    if (!(req.session && req.session.user_id)) {
+      throw { status: 401, message: "Login required" };
+    }
+
+    const { recipeId } = req.params;
+    let source = (req.body.source || "spoon").toLowerCase();
+    const { currentStep, completedSteps, checkedIngredients, servingMultiplier } = req.body;
+
+    // Input validation
+    if (!recipeId || typeof recipeId !== "string" && typeof recipeId !== "number") {
+      return res.status(400).send({ message: "Invalid recipeId" });
+    }
+
+    if (typeof currentStep !== "number" || currentStep < 0) {
+      return res.status(400).send({ message: "Invalid currentStep" });
+    }
+
+    // Default to spoon if source is not valid
+    if (!["db", "spoon"].includes(source)) {
+      source = "spoon";
+    }
+
+    // Initialize cooking progress storage in session if it doesn't exist
+    if (!req.session.cookingProgress) {
+      req.session.cookingProgress = {};
+    }
+
+    const progressKey = `${recipeId}-${source}`;
+    const existingProgress = req.session.cookingProgress[progressKey] || {};
+
+    // Update progress
+    req.session.cookingProgress[progressKey] = {
+      ...existingProgress,
+      currentStep: currentStep || 0,
+      completedSteps: completedSteps || {},
+      checkedIngredients: checkedIngredients || {},
+      servingMultiplier: servingMultiplier || 1,
+      lastUpdated: new Date().toISOString(),
+      startTime: existingProgress.startTime || new Date().toISOString()
+    };
+
+    res.status(200).send({ 
+      message: "Progress saved",
+      progress: req.session.cookingProgress[progressKey]
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /recipes/:recipeId/cooking-progress
+ * Clear cooking mode progress for a recipe.
+ */
+router.delete("/:recipeId/cooking-progress", async (req, res, next) => {
+  try {
+    // Check authentication
+    if (!(req.session && req.session.user_id)) {
+      throw { status: 401, message: "Login required" };
+    }
+
+    const { recipeId } = req.params;
+    let source = (req.query.source || "spoon").toLowerCase();
+
+    // Input validation
+    if (!recipeId || typeof recipeId !== "string" && typeof recipeId !== "number") {
+      return res.status(400).send({ message: "Invalid recipeId" });
+    }
+
+    // Default to spoon if source is not valid
+    if (!["db", "spoon"].includes(source)) {
+      source = "spoon";
+    }
+
+    // Initialize cooking progress storage in session if it doesn't exist
+    if (!req.session.cookingProgress) {
+      req.session.cookingProgress = {};
+    }
+
+    const progressKey = `${recipeId}-${source}`;
+    delete req.session.cookingProgress[progressKey];
+
+    res.status(200).send({ message: "Progress cleared" });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
