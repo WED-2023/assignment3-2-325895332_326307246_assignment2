@@ -42,7 +42,6 @@ exports.createTablesIfNotExist = async function () {
         country VARCHAR(50),
         password VARCHAR(255) NOT NULL,
         email VARCHAR(100) UNIQUE,
-        profilePic VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);

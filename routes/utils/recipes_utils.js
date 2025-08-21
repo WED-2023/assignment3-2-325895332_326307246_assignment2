@@ -35,6 +35,9 @@ async function getRecipeInformation(recipe_id, isSpoonacular = false) {
         isGlutenFree   AS glutenFree,
         servings,
         instructions,
+        isFamilyRecipe,
+        familyWho,
+        familyWhen,
         FALSE          AS isSpoonacular
       FROM Recipes
       WHERE recipe_id = ${id}
@@ -202,7 +205,10 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false, user_id = null
     vegetarian,
     glutenFree,
     servings,
-    instructions
+    instructions,
+    isFamilyRecipe,
+    familyWho,
+    familyWhen
   } = res.data;
   const ingRows = await DButils.execQuery(`
     SELECT quantity, name
@@ -221,6 +227,9 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false, user_id = null
     servings,
     ingredients,
     instructions: instructions.split("\n"),
+    isFamilyRecipe: Boolean(isFamilyRecipe),
+    familyWho,
+    familyWhen,
     isWatched
   };
 }
