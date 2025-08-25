@@ -28,16 +28,22 @@ router.use(async function (req, res, next) {
 router.post('/favorites', async (req,res,next) => {
   try{
     const user_id = req.session.user_id;
-    const { recipeId, isSpoonacular = true } = req.body;
+    const { recipeId, isSpoonacular } = req.body;
+
+    console.log('Favorites toggle request:', { recipeId, isSpoonacular, body: req.body });
 
     // Input validation
     if (
       recipeId === undefined ||
       recipeId === null ||
-      recipeId === "" ||
-      (typeof isSpoonacular !== "boolean" && typeof isSpoonacular !== "undefined")
+      recipeId === ""
     ) {
-      throw { status: 400, message: "Invalid input for favorite recipe" };
+      throw { status: 400, message: "Invalid input for favorite recipe - recipeId required" };
+    }
+
+    // isSpoonacular must be explicitly provided - no defaulting
+    if (isSpoonacular === undefined || typeof isSpoonacular !== "boolean") {
+      throw { status: 400, message: "isSpoonacular parameter is required and must be boolean" };
     }
 
     const exists = await recipe_utils.recipeExists(recipeId, isSpoonacular);
@@ -68,8 +74,14 @@ router.get("/favorites", async (req, res, next) => {
     const allFavs = (await user_utils.getFavoriteRecipes(user_id))
       .filter(r => r.recipe_id);
 
-    const spoonIds = allFavs.filter(r => r.isSpoonacular);
-    const localIds = allFavs.filter(r => !r.isSpoonacular);
+    console.log('All favorites from DB:', allFavs);
+
+    // Explicitly convert isSpoonacular to boolean and filter with strict boolean comparison
+    const spoonIds = allFavs.filter(r => Boolean(r.isSpoonacular) === true);
+    const localIds = allFavs.filter(r => Boolean(r.isSpoonacular) === false);
+
+    console.log('Spoonacular favorites:', spoonIds);
+    console.log('Local DB favorites:', localIds);
 
     const spoonPreviews = await Promise.all(
       spoonIds.map(r => recipe_utils.getRecipePreview(r.recipe_id, true, user_id))
@@ -78,10 +90,26 @@ router.get("/favorites", async (req, res, next) => {
       localIds.map(r => recipe_utils.getRecipePreview(r.recipe_id, false, user_id))
     );
 
-    const allPreviews = [...spoonPreviews, ...localPreviews].map(recipe => ({
-      ...recipe,
-      isFavorite: true // All recipes in favorites page are favorites
-    }));
+    console.log('Spoonacular previews:', spoonPreviews);
+    console.log('Local previews:', localPreviews);
+
+    // Ensure each preview has correct source information
+    const allPreviews = [
+      ...spoonPreviews.map(recipe => ({
+        ...recipe,
+        isFavorite: true,
+        isSpoonacular: true,
+        source: 'spoon'
+      })),
+      ...localPreviews.map(recipe => ({
+        ...recipe,
+        isFavorite: true,
+        isSpoonacular: false,
+        source: 'db'
+      }))
+    ];
+
+    console.log('Final favorites response:', allPreviews);
 
     res.status(200).send(allPreviews);
   } catch (error) {
@@ -101,10 +129,27 @@ router.get('/familyRecipes', async (req, res, next) => {
     const recipes = await DButils.execQuery(
       `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}' AND isFamilyRecipe = true`
     );
+    
     const previews = await Promise.all(
       recipes.map(r => recipe_utils.getRecipePreview(r.recipe_id, false, user_id))
     );
-    res.status(200).send(previews);
+    
+    // Get user's favorites and filter for DB recipes only
+    const favorites = await user_utils.getFavoriteRecipes(user_id);
+    const dbFavorites = new Set(
+      favorites.filter(f => Boolean(f.isSpoonacular) === false)
+               .map(f => String(f.recipe_id))
+    );
+    
+    // Add favorite status based on DB favorites only
+    const recipesWithFavorites = previews.map(recipe => ({
+      ...recipe,
+      isFavorite: dbFavorites.has(String(recipe.id)),
+      isSpoonacular: false,
+      source: 'db'
+    }));
+    
+    res.status(200).send(recipesWithFavorites);
   } catch (error) {
     next(error);
   }
@@ -122,10 +167,27 @@ router.get('/myRecipes', async (req, res, next) => {
     const recipes = await DButils.execQuery(
       `SELECT recipe_id FROM Recipes WHERE user_id = '${user_id}'`
     );
+    
     const previews = await Promise.all(
       recipes.map(r => recipe_utils.getRecipePreview(r.recipe_id, false, user_id))
     );
-    res.status(200).send(previews);
+    
+    // Get user's favorites and filter for DB recipes only
+    const favorites = await user_utils.getFavoriteRecipes(user_id);
+    const dbFavorites = new Set(
+      favorites.filter(f => Boolean(f.isSpoonacular) === false)
+               .map(f => String(f.recipe_id))
+    );
+    
+    // Add favorite status based on DB favorites only
+    const recipesWithFavorites = previews.map(recipe => ({
+      ...recipe,
+      isFavorite: dbFavorites.has(String(recipe.id)),
+      isSpoonacular: false,
+      source: 'db'
+    }));
+    
+    res.status(200).send(recipesWithFavorites);
   } catch (error) {
     next(error);
   }

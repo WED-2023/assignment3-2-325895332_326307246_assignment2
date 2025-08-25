@@ -19,11 +19,15 @@ async function toggleFavorite(user_id, recipe_id, isSpoonacular = true) {
     throw { status: 400, message: "Invalid input for toggling favorite" };
   }
 
+  console.log('toggleFavorite called with:', { user_id, recipe_id, isSpoonacular });
+
   // Check if recipe is already in favorites
   const existing = await DButils.execQuery(`
     SELECT 1 FROM FavoriteRecipes 
     WHERE user_id='${user_id}' AND recipe_id='${recipe_id}' AND isSpoonacular=${isSpoonacular ? 1 : 0}
   `);
+
+  console.log('Existing favorite check result:', existing);
 
   if (existing.length > 0) {
     // Remove from favorites
@@ -31,6 +35,7 @@ async function toggleFavorite(user_id, recipe_id, isSpoonacular = true) {
       DELETE FROM FavoriteRecipes 
       WHERE user_id='${user_id}' AND recipe_id='${recipe_id}' AND isSpoonacular=${isSpoonacular ? 1 : 0}
     `);
+    console.log('Removed from favorites');
     return false; // Removed from favorites
   } else {
     // Add to favorites
@@ -38,6 +43,7 @@ async function toggleFavorite(user_id, recipe_id, isSpoonacular = true) {
       INSERT INTO FavoriteRecipes (user_id, recipe_id, isSpoonacular)
       VALUES ('${user_id}', '${recipe_id}', ${isSpoonacular ? 1 : 0})
     `);
+    console.log('Added to favorites');
     return true; // Added to favorites
   }
 }
@@ -80,7 +86,17 @@ async function getFavoriteRecipes(user_id) {
       FROM FavoriteRecipes
      WHERE user_id='${user_id}'
   `);
-  return recipes;
+  
+  // Ensure isSpoonacular is properly converted to boolean
+  const processedRecipes = recipes.map(recipe => ({
+    ...recipe,
+    isSpoonacular: Boolean(recipe.isSpoonacular)
+  }));
+  
+  console.log('getFavoriteRecipes raw result:', recipes);
+  console.log('getFavoriteRecipes processed result:', processedRecipes);
+  
+  return processedRecipes;
 }
 
 /**

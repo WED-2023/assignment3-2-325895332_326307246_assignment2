@@ -109,7 +109,7 @@ async function getRecipePreview(recipe_id, isSpoonacular = false, user_id = null
     vegan,
     vegetarian,
     glutenFree,
-    isSpoonacular,
+    isSpoonacular: isSpoonacular, // Explicitly set the source
     isWatched: isWatched
   };
 }
@@ -193,6 +193,7 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false, user_id = null
       servings,
       ingredients,
       instructions,
+      isSpoonacular: true, // Explicitly set for Spoonacular recipes
       isWatched
     };
   }
@@ -230,6 +231,7 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false, user_id = null
     isFamilyRecipe: Boolean(isFamilyRecipe),
     familyWho,
     familyWhen,
+    isSpoonacular: false, // Explicitly set for DB recipes
     isWatched
   };
 }
@@ -266,10 +268,12 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances, use
     vegan: r.vegan,
     vegetarian: r.vegetarian,
     glutenFree: r.glutenFree,
-    isSpoonacular: true
+    isSpoonacular: true,
+    isWatched: false, // Default, will be set by caller
+    isFavorite: false // Default, will be set by caller
   }));
 
-  // Add watched status if user is logged in
+  // Only add watched status if user is logged in - NO FAVORITE CHECKING HERE
   if (user_id) {
     const recipeIds = recipes.map(r => r.id);
     if (recipeIds.length > 0) {
@@ -278,27 +282,22 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances, use
         SELECT recipe_id FROM LastWatchedRecipes 
         WHERE user_id = ? AND isSpoonacular = 1 AND recipe_id IN (${placeholders})
       `;
+      
       try {
         const connection = await require("./MySql").connection();
         const params = [user_id, ...recipeIds];
         const watchedResult = await connection.query(watchedQuery, params);
         await connection.release();
         
-        const watchedSet = new Set(watchedResult.map(w => w.recipe_id.toString()));
+        const watchedSet = new Set(watchedResult.map(w => String(w.recipe_id)));
+        
         recipes.forEach(recipe => {
-          recipe.isWatched = watchedSet.has(recipe.id.toString());
+          recipe.isWatched = watchedSet.has(String(recipe.id));
         });
       } catch (error) {
         console.error("Error checking watched status for search results:", error);
-        recipes.forEach(recipe => {
-          recipe.isWatched = false;
-        });
       }
     }
-  } else {
-    recipes.forEach(recipe => {
-      recipe.isWatched = false;
-    });
   }
 
   return recipes;
@@ -326,10 +325,12 @@ async function getRandomRecipes(number = 10, user_id = null) {
     vegan: r.vegan,
     vegetarian: r.vegetarian,
     glutenFree: r.glutenFree,
-    isSpoonacular: true
+    isSpoonacular: true,
+    isWatched: false, // Default, will be set by caller
+    isFavorite: false // Default, will be set by caller
   }));
 
-  // Add watched status if user is logged in
+  // Only add watched status if user is logged in - NO FAVORITE CHECKING HERE
   if (user_id) {
     const recipeIds = recipes.map(r => r.id);
     if (recipeIds.length > 0) {
@@ -338,27 +339,22 @@ async function getRandomRecipes(number = 10, user_id = null) {
         SELECT recipe_id FROM LastWatchedRecipes 
         WHERE user_id = ? AND isSpoonacular = 1 AND recipe_id IN (${placeholders})
       `;
+      
       try {
         const connection = await require("./MySql").connection();
         const params = [user_id, ...recipeIds];
         const watchedResult = await connection.query(watchedQuery, params);
         await connection.release();
         
-        const watchedSet = new Set(watchedResult.map(w => w.recipe_id.toString()));
+        const watchedSet = new Set(watchedResult.map(w => String(w.recipe_id)));
+        
         recipes.forEach(recipe => {
-          recipe.isWatched = watchedSet.has(recipe.id.toString());
+          recipe.isWatched = watchedSet.has(String(recipe.id));
         });
       } catch (error) {
         console.error("Error checking watched status for random recipes:", error);
-        recipes.forEach(recipe => {
-          recipe.isWatched = false;
-        });
       }
     }
-  } else {
-    recipes.forEach(recipe => {
-      recipe.isWatched = false;
-    });
   }
 
   return recipes;
