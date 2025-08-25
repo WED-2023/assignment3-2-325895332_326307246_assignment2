@@ -42,11 +42,11 @@ app.use(express.urlencoded({ extended: false }));
 
 // Serve static files from 'public' and 'dist' directories
 app.use(express.static(path.join(__dirname, "public")));
-app.use(express.static(path.join(__dirname, "dist")));
+app.use(express.static(path.join(__dirname, "../assignment-3-3-frontend/dist")));
 
 // Serve the main HTML file for the root path
 app.get("/", function(req, res) {
-  res.sendFile(__dirname + "/index.html");
+  res.sendFile(__dirname + "../assignment-3-3-frontend/dist/index.html");
 });
 
 // Uncomment below to enable CORS if needed
@@ -65,6 +65,7 @@ var port = process.env.PORT || "3000";
 const user = require("./routes/user");
 const recipes = require("./routes/recipes");
 const auth = require("./routes/auth");
+const { builtinModules } = require("module");
 
 // Middleware to attach user_id to request if session is valid
 app.use(function (req, res, next) {
@@ -96,15 +97,16 @@ app.use(function (err, req, res, next) {
   res.status(err.status || 500).send({ message: err.message, success: false });
 });
 
-// Start the server
-const server = app.listen(port, () => {
-  console.log(`Server listen on port ${port}`);
-});
-
-// Graceful shutdown on SIGINT
-process.on("SIGINT", function () {
-  if (server) {
-    server.close(() => console.log("server closed"));
-  }
-  process.exit();
-});
+// // Start the server
+// const server = app.listen(port, () => {
+//   console.log(`Server listen on port ${port}`);
+// });
+// 
+// // Graceful shutdown on SIGINT
+// process.on("SIGINT", function () {
+//   if (server) {
+//     server.close(() => console.log("server closed"));
+//   }
+//   process.exit();
+// });
+module.exports = app;
