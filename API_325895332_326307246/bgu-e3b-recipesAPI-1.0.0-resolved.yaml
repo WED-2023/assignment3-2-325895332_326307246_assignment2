@@ -2,18 +2,37 @@ openapi: 3.0.0
 info:
   title: Family-Recipe API
   description: |
-    Contract between the Vue frontend and the Node + Express backend (commit 03-Jun-2025).   All paths, parameters and status-codes mirror the server implementation in **routes/auth.js**, **routes/recipes.js** and **routes/user.js**.
-  version: 1.0.0
+    Contract between the Vue frontend and the Node + Express backend (updated August 2025).   All paths, parameters and status-codes mirror the server implementation in **routes/auth.js**, **routes/recipes.js** and **routes/user.js**.
+  version: 2.0.0
 servers:
-- url: https://virtserver.swaggerhub.com/bgu-e3b/recipesAPI/1.0.0
+- url: https://virtserver.swaggerhub.com/bgu-e3b/recipesAPI/2.0.0
   description: SwaggerHub API Auto Mocking
-- url: https://family-recipe.example.com
+- url: https://shahafr.cs.bgu.ac.il
   description: Production
 - url: http://localhost:3000
   description: Local development
 security:
 - cookieAuth: []
 paths:
+  /countries:
+    get:
+      tags:
+      - Auth
+      summary: Get list of available countries
+      description: Returns a list of countries for registration form, filtered and cached
+      responses:
+        "200":
+          description: List of country names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["Afghanistan", "Albania", "Algeria"]
+        "500":
+          description: Server error fetching countries
+      security: []
   /Register:
     post:
       tags:
@@ -27,9 +46,13 @@ paths:
         required: true
       responses:
         "201":
-          description: User created
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
         "400":
-          description: Validation failed
+          description: Validation failed or invalid country
         "409":
           description: Username already exists
   /Login:
@@ -45,7 +68,11 @@ paths:
         required: true
       responses:
         "200":
-          description: Login succeeded (cookie set)
+          description: Login succeeded (session cookie set)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
         "400":
           description: Validation failed
         "401":
@@ -57,21 +84,25 @@ paths:
       summary: Log out
       responses:
         "200":
-          description: Session cleared
+          description: Session cleared successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
       security:
       - cookieAuth: []
   /about:
     get:
       tags:
       - Info
-      summary: Project & team info
+      summary: Project & team info with previous projects
       responses:
         "200":
-          description: Static project information
+          description: Enhanced project information including team and previous projects
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/inline_response_200'
+                $ref: '#/components/schemas/AboutResponse'
       security: []
   /recipes:
     get:
@@ -80,11 +111,11 @@ paths:
       summary: Main-page data (random & last-watched)
       responses:
         "200":
-          description: Mixed random / last-watched previews
+          description: Mixed random / last-watched previews with enhanced user data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/inline_response_200_1'
+                $ref: '#/components/schemas/MainPageResponse'
       security: []
     post:
       tags:
@@ -181,6 +212,174 @@ paths:
           description: Invalid parameters
         "404":
           description: Recipe not found
+  /recipes/{recipeId}/cooking-mode:
+    get:
+      tags:
+      - Recipes
+      summary: Get recipe in cooking mode format
+      description: Returns recipe formatted for step-by-step cooking with adjustable servings
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/recipeId'
+      - name: source
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - db
+          - spoon
+          default: spoon
+      - name: servings
+        in: query
+        required: false
+        schema:
+          type: number
+          minimum: 0.1
+          default: 1
+        description: Serving size multiplier for ingredient quantities
+      responses:
+        "200":
+          description: Recipe data formatted for cooking mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingModeResponse'
+        "400":
+          description: Invalid parameters or serving multiplier
+        "404":
+          description: Recipe not found
+  /recipes/{recipeId}/meal-plan:
+    post:
+      tags:
+      - Recipes
+      summary: Add recipe to user's meal plan
+      description: Note - This endpoint currently returns a mock response as meal plan storage is not fully implemented
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/recipeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MealPlanRequest'
+      responses:
+        "201":
+          description: Recipe added to meal plan (mock response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MealPlanResponse'
+        "400":
+          description: Invalid request data
+        "401":
+          description: Login required
+      security:
+      - cookieAuth: []
+  /recipes/{recipeId}/cooking-progress:
+    get:
+      tags:
+      - Recipes
+      summary: Get saved cooking progress for a recipe
+      description: Returns cooking progress stored in user session (not persistent across sessions)
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/recipeId'
+      - name: source
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - db
+          - spoon
+          default: spoon
+      responses:
+        "200":
+          description: Current cooking progress from session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingProgress'
+        "400":
+          description: Invalid recipe ID
+        "401":
+          description: Login required
+      security:
+      - cookieAuth: []
+    post:
+      tags:
+      - Recipes
+      summary: Save cooking progress for a recipe
+      description: Saves cooking progress to user session (not persistent across sessions)
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/recipeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CookingProgressUpdate'
+      responses:
+        "200":
+          description: Progress saved to session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingProgressSaveResponse'
+        "400":
+          description: Invalid progress data
+        "401":
+          description: Login required
+      security:
+      - cookieAuth: []
+    delete:
+      tags:
+      - Recipes
+      summary: Clear cooking progress for a recipe
+      description: Removes cooking progress from user session
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/recipeId'
+      - name: source
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - db
+          - spoon
+          default: spoon
+      responses:
+        "200":
+          description: Progress cleared from session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        "400":
+          description: Invalid recipe ID
+        "401":
+          description: Login required
+      security:
+      - cookieAuth: []
   /users/favorites:
     get:
       tags:
@@ -213,7 +412,11 @@ paths:
         required: true
       responses:
         "200":
-          description: Saved as favorite
+          description: Saved/removed from favorites with status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteResponse'
         "400":
           description: Invalid input
         "404":
@@ -260,10 +463,16 @@ paths:
     get:
       tags:
       - Health
-      summary: Simple liveness probe
+      summary: Server liveness probe
+      description: Simple endpoint to check if server is running
       responses:
         "200":
-          description: Server is alive
+          description: Server is alive and responding
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "I'm alive"
       security: []
 components:
   schemas:
@@ -324,41 +533,44 @@ components:
     RecipePreview:
       required:
       - id
+      - title
       - image
-      - isFavorite
-      - isGlutenFree
-      - isVegan
-      - isVegetarian
-      - name
-      - popularity
-      - preparationTimeMinutes
-      - wasWatched
+      - readyInMinutes
+      - vegan
+      - vegetarian
+      - glutenFree
+      - isSpoonacular
       type: object
       properties:
         id:
           oneOf:
           - type: string
           - type: integer
-        name:
+        title:
           type: string
         image:
           type: string
           format: uri
-        preparationTimeMinutes:
+        readyInMinutes:
           type: integer
-        popularity:
+        vegan:
+          type: boolean
+        vegetarian:
+          type: boolean
+        glutenFree:
+          type: boolean
+        servings:
           type: integer
-          description: number of likes
-        isVegan:
-          type: boolean
-        isVegetarian:
-          type: boolean
-        isGlutenFree:
-          type: boolean
+          description: Number of servings (available for DB recipes)
         isFavorite:
           type: boolean
-        wasWatched:
+          description: Whether the recipe is in user's favorites (only when user is authenticated)
+        isWatched:
           type: boolean
+          description: Whether the recipe has been viewed by the user (only when user is authenticated)
+        isSpoonacular:
+          type: boolean
+          description: Whether the recipe is from Spoonacular API or local database
     RecipeDetails:
       allOf:
       - $ref: '#/components/schemas/RecipePreview'
@@ -388,6 +600,18 @@ components:
                     type: string
                   quantity:
                     type: string
+          source:
+            type: string
+            description: Source of the recipe (db or spoon)
+          isFamilyRecipe:
+            type: boolean
+            description: Whether this is a family recipe (only for DB recipes)
+          familyWho:
+            type: string
+            description: Who in the family this recipe is from
+          familyWhen:
+            type: string
+            description: When this family recipe originated
     NewRecipe:
       required:
       - ingredients
@@ -407,10 +631,13 @@ components:
           type: integer
         vegan:
           type: boolean
+          default: false
         vegetarian:
           type: boolean
+          default: false
         glutenFree:
           type: boolean
+          default: false
         servings:
           minimum: 1
           type: integer
@@ -438,7 +665,14 @@ components:
           type: boolean
           default: false
         familyStory:
-          type: string
+          type: object
+          properties:
+            who:
+              type: string
+              description: Who in the family this recipe is from
+            when:
+              type: string
+              description: When this family recipe originated
     inline_response_200:
       type: object
       properties:
@@ -448,30 +682,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/inline_response_200_team'
-    inline_response_200_1:
-      required:
-      - lastWatched
-      - random
-      type: object
-      properties:
-        random:
-          type: array
-          items:
-            $ref: '#/components/schemas/RecipePreview'
-        lastWatched:
-          oneOf:
-          - type: array
-            items:
-              $ref: '#/components/schemas/RecipePreview'
-          - required:
-            - loginRequired
-            - loginUrl
-            type: object
-            properties:
-              loginRequired:
-                type: boolean
-              loginUrl:
-                type: string
     inline_response_201:
       required:
       - message
@@ -501,6 +711,253 @@ components:
           type: string
         contact:
           type: string
+    SuccessResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        redirect:
+          type: string
+          description: Redirect URL after successful operation
+    AboutResponse:
+      type: object
+      required:
+        - summary
+        - team
+      properties:
+        summary:
+          type: string
+        team:
+          type: array
+          items:
+            $ref: '#/components/schemas/inline_response_200_team'
+        previousProjects:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              url:
+                type: string
+                format: uri
+    MainPageResponse:
+      required:
+      - lastWatched
+      - random
+      type: object
+      properties:
+        random:
+          type: array
+          items:
+            allOf:
+            - $ref: '#/components/schemas/RecipePreview'
+            - type: object
+              properties:
+                isSpoonacular:
+                  type: boolean
+                  enum: [true]
+                  description: Random recipes are always from Spoonacular
+                isFavorite:
+                  type: boolean
+                  description: Only present when user is authenticated
+        lastWatched:
+          oneOf:
+          - type: array
+            items:
+              allOf:
+              - $ref: '#/components/schemas/RecipePreview'
+              - type: object
+                properties:
+                  isFavorite:
+                    type: boolean
+                    description: Whether this recipe is in user's favorites
+            description: Last watched recipes (when user is authenticated)
+          - required:
+            - loginRequired
+            - loginUrl
+            type: object
+            properties:
+              loginRequired:
+                type: boolean
+                enum: [true]
+              loginUrl:
+                type: string
+            description: Login prompt (when user is not authenticated)
+    CookingModeResponse:
+      type: object
+      required:
+        - id
+        - title
+        - ingredients
+        - instructions
+        - currentStep
+        - totalSteps
+      properties:
+        id:
+          oneOf:
+          - type: string
+          - type: integer
+        title:
+          type: string
+        image:
+          type: string
+          format: uri
+        servings:
+          type: integer
+        readyInMinutes:
+          type: integer
+        ingredients:
+          type: array
+          items:
+            oneOf:
+            - type: string
+            - type: object
+              properties:
+                name:
+                  type: string
+                quantity:
+                  type: string
+        instructions:
+          type: array
+          items:
+            type: string
+        currentStep:
+          type: integer
+          description: Current step index (0-based)
+        totalSteps:
+          type: integer
+          description: Total number of steps
+        servingMultiplier:
+          type: number
+          description: Multiplier applied to ingredient quantities
+        originalServings:
+          type: integer
+          description: Original number of servings before multiplier
+    MealPlanRequest:
+      type: object
+      required:
+        - date
+        - mealType
+      properties:
+        date:
+          type: string
+          format: date
+        mealType:
+          type: string
+          enum: [breakfast, lunch, dinner, snack]
+        servings:
+          type: integer
+          minimum: 1
+          default: 1
+        source:
+          type: string
+          enum: [db, spoon]
+          default: spoon
+    MealPlanResponse:
+      type: object
+      required:
+        - message
+        - mealPlan
+      properties:
+        message:
+          type: string
+        mealPlan:
+          type: object
+          properties:
+            user_id:
+              type: integer
+            recipe_id:
+              oneOf:
+              - type: string
+              - type: integer
+            isSpoonacular:
+              type: boolean
+            date:
+              type: string
+              format: date
+            mealType:
+              type: string
+            servings:
+              type: integer
+            created_at:
+              type: string
+              format: date-time
+    CookingProgress:
+      type: object
+      required:
+        - currentStep
+        - completedSteps
+        - checkedIngredients
+        - servingMultiplier
+        - startTime
+        - lastUpdated
+      properties:
+        currentStep:
+          type: integer
+          minimum: 0
+        completedSteps:
+          type: object
+          description: Map of step index to completion status
+        checkedIngredients:
+          type: object
+          description: Map of ingredient index to checked status
+        servingMultiplier:
+          type: number
+          minimum: 0.1
+        startTime:
+          type: string
+          format: date-time
+        lastUpdated:
+          type: string
+          format: date-time
+    CookingProgressUpdate:
+      type: object
+      required:
+        - currentStep
+      properties:
+        currentStep:
+          type: integer
+          minimum: 0
+        completedSteps:
+          type: object
+        checkedIngredients:
+          type: object
+        servingMultiplier:
+          type: number
+          minimum: 0.1
+        source:
+          type: string
+          enum: [db, spoon]
+          default: spoon
+    CookingProgressSaveResponse:
+      type: object
+      required:
+        - message
+        - progress
+      properties:
+        message:
+          type: string
+        progress:
+          $ref: '#/components/schemas/CookingProgress'
+    FavoriteResponse:
+      type: object
+      required:
+        - message
+        - isFavorite
+        - success
+      properties:
+        message:
+          type: string
+        isFavorite:
+          type: boolean
+        success:
+          type: boolean
   securitySchemes:
     cookieAuth:
       type: apiKey
