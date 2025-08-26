@@ -1,3 +1,18 @@
+/**
+ * User Routes Module
+ * 
+ * Handles user-specific operations and protected endpoints that require authentication.
+ * All routes in this module are protected by authentication middleware and provide
+ * personalized functionality for logged-in users.
+ * 
+ * Features:
+ * - User authentication verification middleware
+ * - Favorite recipe management (add/remove/list)
+ * - Personal recipe collection retrieval
+ * - Family recipe management
+ * - User-specific data operations with privacy protection
+ */
+
 var express = require("express");
 var router = express.Router();
 const DButils = require("./utils/DButils");
@@ -5,11 +20,14 @@ const user_utils = require("./utils/user_utils");
 const recipe_utils = require("./utils/recipes_utils");
 
 /**
- * Middleware to authenticate all incoming requests.
- * Attaches user_id to req if session is valid, otherwise returns 401.
+ * Authentication Middleware
+ * Protects all routes in this module by verifying user session validity
+ * Automatically attaches user_id to request object for authenticated users
+ * Returns 401 Unauthorized for invalid or missing sessions
  */
 router.use(async function (req, res, next) {
   if (req.session && req.session.user_id) {
+    // Verify user exists in database to prevent stale sessions
     DButils.execQuery("SELECT user_id FROM users").then((users) => {
       if (users.find((x) => x.user_id === req.session.user_id)) {
         req.user_id = req.session.user_id;
@@ -22,8 +40,10 @@ router.use(async function (req, res, next) {
 });
 
 /**
- * Toggle a recipe in the favorites list of the logged-in user.
- * Expects: { recipeId, isSpoonacular } in req.body
+ * POST /favorites
+ * Toggles a recipe's favorite status for the authenticated user
+ * Smart toggle: adds if not favorited, removes if already favorited
+ * Expects: { recipeId, isSpoonacular } in request body
  */
 router.post('/favorites', async (req,res,next) => {
   try{

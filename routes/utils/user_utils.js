@@ -1,16 +1,30 @@
+/**
+ * User Utilities Module
+ * 
+ * This module handles user-specific operations related to recipes and preferences.
+ * Manages user interactions with recipes including favorites, viewing history,
+ * and personalized recipe recommendations.
+ * 
+ * Features:
+ * - Favorite recipe management (add/remove/toggle)
+ * - User recipe retrieval with filtering
+ * - Database operations for user preferences
+ * - Input validation and error handling
+ */
+
 const DButils = require("./DButils");
 
-
 /**
- * Toggles a recipe as favorite for a user (add if not exists, remove if exists).
- * @param {string|number} user_id - The user's ID.
- * @param {string|number} recipe_id - The recipe's ID.
- * @param {boolean} [isSpoonacular=true] - Whether the recipe is from Spoonacular.
- * @returns {Promise<boolean>} - True if added to favorites, false if removed.
- * @throws {object} If recipe_id is invalid or isSpoonacular is not boolean.
+ * Toggles a recipe's favorite status for a user (smart add/remove functionality)
+ * If recipe is not favorited, adds it; if already favorited, removes it
+ * @param {string|number} user_id - The unique identifier of the user
+ * @param {string|number} recipe_id - The unique identifier of the recipe
+ * @param {boolean} [isSpoonacular=true] - Source flag indicating if recipe is from Spoonacular API
+ * @returns {Promise<boolean>} True if recipe was added to favorites, false if removed from favorites
+ * @throws {object} Error object for invalid input parameters or database operation failures
  */
 async function toggleFavorite(user_id, recipe_id, isSpoonacular = true) {
-  // Validate input
+  // Comprehensive input validation
   if (
     user_id === undefined || user_id === null || user_id === "" ||
     recipe_id === undefined || recipe_id === null || recipe_id === "" ||
@@ -21,7 +35,7 @@ async function toggleFavorite(user_id, recipe_id, isSpoonacular = true) {
 
   console.log('toggleFavorite called with:', { user_id, recipe_id, isSpoonacular });
 
-  // Check if recipe is already in favorites
+  // Check if recipe is already in user's favorites
   const existing = await DButils.execQuery(`
     SELECT 1 FROM FavoriteRecipes 
     WHERE user_id='${user_id}' AND recipe_id='${recipe_id}' AND isSpoonacular=${isSpoonacular ? 1 : 0}
@@ -38,7 +52,7 @@ async function toggleFavorite(user_id, recipe_id, isSpoonacular = true) {
     console.log('Removed from favorites');
     return false; // Removed from favorites
   } else {
-    // Add to favorites
+    // Add recipe to user's favorites
     await DButils.execQuery(`
       INSERT INTO FavoriteRecipes (user_id, recipe_id, isSpoonacular)
       VALUES ('${user_id}', '${recipe_id}', ${isSpoonacular ? 1 : 0})
@@ -49,14 +63,15 @@ async function toggleFavorite(user_id, recipe_id, isSpoonacular = true) {
 }
 
 /**
- * Marks a recipe as favorite for a user.
- * @param {string|number} user_id - The user's ID.
- * @param {string|number} recipe_id - The recipe's ID.
- * @param {boolean} [isSpoonacular=true] - Whether the recipe is from Spoonacular.
- * @throws {object} If recipe_id is invalid or isSpoonacular is not boolean.
+ * Explicitly marks a recipe as favorite for a user (add-only operation)
+ * Unlike toggleFavorite, this only adds to favorites without removing
+ * @param {string|number} user_id - The unique identifier of the user
+ * @param {string|number} recipe_id - The unique identifier of the recipe
+ * @param {boolean} [isSpoonacular=true] - Source flag indicating if recipe is from Spoonacular API
+ * @throws {object} Error object for invalid input parameters or database operation failures
  */
 async function markAsFavorite(user_id, recipe_id, isSpoonacular = true) {
-  // Validate input
+  // Comprehensive input validation
   if (
     user_id === undefined || user_id === null || user_id === "" ||
     recipe_id === undefined || recipe_id === null || recipe_id === "" ||
@@ -73,21 +88,26 @@ async function markAsFavorite(user_id, recipe_id, isSpoonacular = true) {
 }
 
 /**
- * Retrieves all favorite recipes for a user.
- * @param {string|number} user_id - The user's ID.
- * @returns {Promise<Array<{recipe_id: string, isSpoonacular: boolean}>>}
+ * Retrieves all favorite recipes for a specific user
+ * Returns recipe identifiers with source information for further processing
+ * @param {string|number} user_id - The unique identifier of the user
+ * @returns {Promise<Array<{recipe_id: string, isSpoonacular: boolean}>>} Array of favorite recipe references
+ * @throws {object} Error object for invalid user ID or database operation failures
  */
 async function getFavoriteRecipes(user_id) {
+  // Validate user ID parameter
   if (user_id === undefined || user_id === null || user_id === "") {
     throw { status: 400, message: "Invalid user_id" };
   }
+  
+  // Query user's favorite recipes from database
   const recipes = await DButils.execQuery(`
     SELECT recipe_id, isSpoonacular
       FROM FavoriteRecipes
      WHERE user_id='${user_id}'
   `);
   
-  // Ensure isSpoonacular is properly converted to boolean
+  // Ensure isSpoonacular is properly converted to boolean for consistency
   const processedRecipes = recipes.map(recipe => ({
     ...recipe,
     isSpoonacular: Boolean(recipe.isSpoonacular)
@@ -100,9 +120,9 @@ async function getFavoriteRecipes(user_id) {
 }
 
 /**
- * Marks a recipe as watched for a user.
- * @param {string|number} user_id - The user's ID.
- * @param {string|number} recipe_id - The recipe's ID.
+ * Records that a user has viewed a specific recipe (viewing history tracking)
+ * @param {string|number} user_id - The unique identifier of the user
+ * @param {string|number} recipe_id - The unique identifier of the recipe
  * @param {boolean} [isSpoonacular=true] - Whether the recipe is from Spoonacular.
  */
 async function markAsWatched(user_id, recipe_id, isSpoonacular = true) {

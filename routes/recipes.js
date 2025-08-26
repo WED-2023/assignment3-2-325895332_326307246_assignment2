@@ -1,27 +1,43 @@
-// routes/recipes.js
+/**
+ * Recipes Routes Module
+ * 
+ * Handles all recipe-related API endpoints including retrieval, creation, and search.
+ * Integrates both Spoonacular API data and local database recipes with user-specific
+ * personalization features.
+ * 
+ * Features:
+ * - Recipe retrieval from multiple sources (API and database)
+ * - User-personalized recipe recommendations
+ * - Recipe creation and management
+ * - Advanced recipe search with filters
+ * - User interaction tracking (favorites, viewing history)
+ * - Cooking mode support with progress tracking
+ */
+
 const express = require("express");
-const router  = express.Router();
+const router = express.Router();
 
 const recipes_utils = require("./utils/recipes_utils");
-const user_utils    = require("./utils/user_utils");
+const user_utils = require("./utils/user_utils");
 
 /**
  * GET /recipes
- * Main page endpoint.
- * - If user is logged in: returns 3 last watched recipes (preview).
- * - If not logged in: returns 3 random Spoonacular recipes (preview).
+ * Main page endpoint providing personalized recipe recommendations
+ * Returns different content based on user authentication status:
+ * - Authenticated users: Random recipes + last watched recipes with favorite status
+ * - Guest users: Random recipes from Spoonacular API
  */
 router.get("/", async (req, res, next) => {
   try {
     const payload = { random: [], lastWatched: [] };
     const user_id = req.session?.user_id || null;
 
-    // Always show 3 random Spoonacular recipes (no favorites checked in utility)
+    // Provide 3 random Spoonacular recipes for all users
     payload.random = await recipes_utils.getRandomRecipes(3, user_id);
 
-    // If user is logged in, add favorites to random recipes
+    // Add personalized content for authenticated users
     if (user_id) {
-      // Get ONLY Spoonacular favorites
+      // Get user's Spoonacular favorites for preference indication
       const DButils = require("./utils/DButils");
       const spoonacularFavoritesResult = await DButils.execQuery(`
         SELECT recipe_id FROM FavoriteRecipes 

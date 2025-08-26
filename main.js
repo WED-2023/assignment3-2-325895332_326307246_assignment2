@@ -1,6 +1,22 @@
+/**
+ * Vue Recipes Backend Application
+ * 
+ * Main entry point for the Express.js backend server that powers the Vue Recipes application.
+ * Provides RESTful API endpoints for recipe management, user authentication, and data persistence.
+ * 
+ * Features:
+ * - Express.js web framework with middleware stack
+ * - Session-based authentication with client-sessions
+ * - Database initialization and connection management
+ * - Static file serving for frontend application
+ * - Request logging and JSON parsing
+ * - Route organization with modular structure
+ * - CORS support for cross-origin requests
+ */
+
 require("dotenv").config();
 
-// Express and middleware setup
+// Core Express and middleware imports
 var express = require("express");
 var path = require("path");
 var logger = require("morgan");
@@ -8,7 +24,7 @@ const session = require("client-sessions");
 const DButils = require("./routes/utils/DButils");
 var cors = require('cors')
 
-// Ensure all required DB tables exist before starting the server
+// Initialize database schema before starting server
 DButils.createTablesIfNotExist()
   .then(() => console.log("Database tables checked/created."))
   .catch(err => {
@@ -18,26 +34,26 @@ DButils.createTablesIfNotExist()
 
 var app = express();
 
-// HTTP request logger
+// HTTP request logging for development and debugging
 app.use(logger("dev"));
 
-// Parse JSON request bodies
+// JSON request body parsing middleware
 app.use(express.json());
 
-// Session configuration
+// Session management configuration
 app.use(
   session({
-    cookieName: "session",
-    secret: "template",
-    duration: 24 * 60 * 60 * 1000,
-    activeDuration: 1000 * 60 * 5,
+    cookieName: "session",              // Session cookie name
+    secret: "template",                 // Session encryption secret
+    duration: 24 * 60 * 60 * 1000,      // 24 hours session duration
+    activeDuration: 1000 * 60 * 5,      // 5 minutes activity extension
     cookie: {
-      httpOnly: false,
+      httpOnly: false,                  // Allow client-side access for SPA
     }
   })
 );
 
-// Parse URL-encoded request bodies
+// URL-encoded form data parsing middleware
 app.use(express.urlencoded({ extended: false }));
 
 // Serve static files from 'public' and 'dist' directories

@@ -1,32 +1,62 @@
-﻿var express = require("express");
+﻿/**
+ * Authentication Routes Module
+ * 
+ * Handles user authentication operations including registration, login, logout,
+ * and supporting functions like country data retrieval for registration forms.
+ * Implements security best practices with password hashing and session management.
+ * 
+ * Features:
+ * - User registration with validation and password hashing
+ * - Secure login with credential verification
+ * - Session-based authentication management
+ * - Country data caching for registration forms
+ * - Application information endpoints
+ */
+
+var express = require("express");
 var router = express.Router();
 const MySql = require("../routes/utils/MySql");
 const DButils = require("../routes/utils/DButils");
 const bcrypt = require("bcrypt");
 const axios = require("axios");
 
+// Configuration for country filtering
 const EXCLUDE = ["Palestine", "Iran"];
 
+// Country data caching configuration
 let cachedCountries = { list: [], fetchedAt: 0 };
-const COUNTRIES_TTL = 24 * 60 * 60 * 1000; // 24 שעות
+const COUNTRIES_TTL = 24 * 60 * 60 * 1000; // 24 hours cache duration
 
+/**
+ * Retrieves and caches country data from REST Countries API
+ * Implements caching strategy to reduce API calls and improve performance
+ * @returns {Promise<string[]>} Sorted array of country names (filtered)
+ * @throws {Error} API request failures or data processing errors
+ */
 async function getCountries() {
   const now = Date.now();
+  
+  // Return cached data if still valid
   if (cachedCountries.list.length && now - cachedCountries.fetchedAt < COUNTRIES_TTL) {
     return cachedCountries.list;
   }
 
+  // Fetch fresh country data from external API
   const res = await axios.get("https://restcountries.com/v3.1/all?fields=name");
   cachedCountries.list = res.data
     .map(c => c.name.common)
-    .filter(name => !EXCLUDE.includes(name))
-    .sort((a, b) => a.localeCompare(b));
+    .filter(name => !EXCLUDE.includes(name))  // Remove excluded countries
+    .sort((a, b) => a.localeCompare(b));      // Alphabetical sorting
 
   cachedCountries.fetchedAt = now;
   return cachedCountries.list;
 }
 
-
+/**
+ * GET /countries
+ * Provides list of countries for registration form dropdowns
+ * Returns cached data when available to improve response time
+ */
 router.get("/countries", async (req, res, next) => {
     try {
         res.json(await getCountries());

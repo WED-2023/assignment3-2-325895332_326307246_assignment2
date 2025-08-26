@@ -1,32 +1,51 @@
+/**
+ * Database Utilities Module
+ * 
+ * This module provides essential database operation utilities for the application.
+ * Handles transaction management, connection pooling, and database initialization.
+ * 
+ * Features:
+ * - Safe query execution with transaction support
+ * - Automatic rollback on errors
+ * - Database schema initialization
+ * - Connection management and cleanup
+ */
+
 require("dotenv").config();
 const MySql = require("./MySql");
 
 /**
- * Executes a SQL query within a transaction.
- * @param {string} query - The SQL query to execute.
- * @returns {Promise<any>} - The result of the query.
- * @throws {Error} If the query fails.
+ * Executes a SQL query within a transaction context for data safety
+ * Automatically handles transaction lifecycle (begin, commit, rollback)
+ * @param {string} query - The SQL query string to execute
+ * @returns {Promise<any>} Query result data from the database
+ * @throws {Error} Database error with automatic transaction rollback
  */
 exports.execQuery = async function (query) {
     let returnValue = []
     const connection = await MySql.connection();
     try {
+    // Begin transaction for data consistency
     await connection.query("START TRANSACTION");
     returnValue = await connection.query(query);
+    // Implicit commit if no errors occur
   } catch (err) {
+    // Rollback transaction on any error
     await connection.query("ROLLBACK");
     throw err;
   } finally {
+    // Always release connection back to pool
     await connection.release();
   }
   return returnValue
 }
 
 /**
- * Creates all required database tables if they do not exist.
- * Uses a transaction to ensure atomicity.
+ * Initializes the database schema by creating all required tables
+ * Ensures database structure exists before application operations
+ * Uses transactions to maintain consistency during setup
  * @returns {Promise<void>}
- * @throws {Error} If table creation fails.
+ * @throws {Error} If table creation or setup fails
  */
 exports.createTablesIfNotExist = async function () {
   const connection = await MySql.connection();
