@@ -3,9 +3,9 @@ info:
   title: Family-Recipe API
   description: |
     Contract between the Vue frontend and the Node + Express backend (updated August 2025).   All paths, parameters and status-codes mirror the server implementation in **routes/auth.js**, **routes/recipes.js** and **routes/user.js**.
-  version: 2.0.0
+  version: 3.0.0
 servers:
-- url: https://virtserver.swaggerhub.com/bgu-e3b/recipesAPI/2.0.0
+- url: https://virtserver.swaggerhub.com/bgu-e3b/recipesAPI/3.0.0
   description: SwaggerHub API Auto Mocking
 - url: https://shahafr.cs.bgu.ac.il
   description: Production
@@ -50,11 +50,42 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "user created, please login"
+                  redirect:
+                    type: string
+                    example: "/Login"
         "400":
           description: Validation failed or invalid country
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    example: false
         "409":
           description: Username already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Username taken"
+                  success:
+                    type: boolean
+                    example: false
   /Login:
     post:
       tags:
@@ -72,11 +103,43 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "login succeeded"
+                  redirect:
+                    type: string
+                    example: "/recipes"
         "400":
           description: Validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Invalid username or password"
+                  success:
+                    type: boolean
+                    example: false
         "401":
           description: Invalid username / password
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Invalid username or password"
+                  success:
+                    type: boolean
+                    example: false
   /Logout:
     post:
       tags:
@@ -88,7 +151,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "logout succeeded"
+                  redirect:
+                    type: string
+                    example: "/recipes"
       security:
       - cookieAuth: []
   /about:
@@ -102,7 +175,39 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AboutResponse'
+                type: object
+                properties:
+                  summary:
+                    type: string
+                    example: "This project is all about family. Allowing you to store your traditional family recipes, be rest assured that with us your family would enjoy traditional meals for generations! Developed by a dedicated student team from Ben-Gurion University."
+                  team:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TeamMember'
+                    example:
+                      - name: "Shahaf Har-Tsvi"
+                        role: "Developer"
+                        contact: "hartsvis@bgu.ac.il"
+                      - name: "Shahar Navian"
+                        role: "Developer"
+                        contact: "navians@post.bgu.ac.il"
+                  previousProjects:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title:
+                          type: string
+                        url:
+                          type: string
+                          format: uri
+                    example:
+                      - title: "Space Invaders"
+                        url: "https://wed-2023.github.io/assignment2-325895332_326307246_assignment2/"
+                      - title: "Varda's personal site"
+                        url: "https://wed-2023.github.io/assignment1-326307246/"
+                      - title: "Trevor's personal site"
+                        url: "https://wed-2023.github.io/325895332/"
       security: []
   /recipes:
     get:
@@ -115,7 +220,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MainPageResponse'
+                type: object
+                properties:
+                  random:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecipePreview'
+                    description: Array of 3 random Spoonacular recipes
+                  lastWatched:
+                    oneOf:
+                    - type: array
+                      items:
+                        $ref: '#/components/schemas/RecipePreview'
+                      description: Last watched recipes (when user is authenticated)
+                    - type: object
+                      properties:
+                        loginRequired:
+                          type: boolean
+                          enum: [true]
+                        loginUrl:
+                          type: string
+                          example: "/login"
+                      description: Login prompt (when user is not authenticated)
       security: []
     post:
       tags:
@@ -133,11 +259,42 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/inline_response_201'
+                type: object
+                properties:
+                  recipe_id:
+                    oneOf:
+                    - type: string
+                    - type: integer
+                    description: The ID of the created recipe
+                  message:
+                    type: string
+                    example: "Recipe created"
         "400":
           description: Validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Missing mandatory fields"
+                  success:
+                    type: boolean
+                    example: false
         "401":
           description: Login required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Login required"
+                  success:
+                    type: boolean
+                    example: false
       security:
       - cookieAuth: []
   /recipes/search:
@@ -156,6 +313,9 @@ paths:
         required: false
         schema:
           type: integer
+          enum: [5, 10, 15]
+          default: 5
+        description: Number of recipes to return (allowed values: 5, 10, 15)
       - name: cuisine
         in: query
         required: false
@@ -182,6 +342,17 @@ paths:
                   $ref: '#/components/schemas/RecipePreview'
         "400":
           description: Missing query parameter
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Query parameter is required"
+                  success:
+                    type: boolean
+                    example: false
   /recipes/{recipeId}:
     get:
       tags:
@@ -210,8 +381,30 @@ paths:
                 $ref: '#/components/schemas/RecipeDetails'
         "400":
           description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Invalid recipeId"
+                  success:
+                    type: boolean
+                    example: false
         "404":
           description: Recipe not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Recipe not found"
+                  success:
+                    type: boolean
+                    example: false
   /recipes/{recipeId}/cooking-mode:
     get:
       tags:
@@ -393,11 +586,21 @@ paths:
               schema:
                 type: array
                 items:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/RecipePreview'
+                  $ref: '#/components/schemas/RecipePreview'
+                description: Array of favorite recipes with source and favorite status
         "401":
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Unauthorized"
+                  success:
+                    type: boolean
+                    example: false
       security:
       - cookieAuth: []
     post:
@@ -419,8 +622,30 @@ paths:
                 $ref: '#/components/schemas/FavoriteResponse'
         "400":
           description: Invalid input
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Invalid input for favorite recipe - recipeId required"
+                  success:
+                    type: boolean
+                    example: false
         "404":
           description: Recipe not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Recipe not found"
+                  success:
+                    type: boolean
+                    example: false
       security:
       - cookieAuth: []
   /users/myRecipes:
@@ -439,6 +664,17 @@ paths:
                   $ref: '#/components/schemas/RecipePreview'
         "401":
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Unauthorized"
+                  success:
+                    type: boolean
+                    example: false
       security:
       - cookieAuth: []
   /users/familyRecipes:
@@ -457,6 +693,17 @@ paths:
                   $ref: '#/components/schemas/RecipePreview'
         "401":
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Unauthorized"
+                  success:
+                    type: boolean
+                    example: false
       security:
       - cookieAuth: []
   /alive:
@@ -490,21 +737,31 @@ components:
         username:
           pattern: "^[A-Za-z]{3,8}$"
           type: string
+          description: "Username must be 3-8 letters only"
         firstname:
           type: string
+          minLength: 1
+          description: "First name is required and must be non-empty"
         lastname:
           type: string
+          minLength: 1
+          description: "Last name is required and must be non-empty"
         country:
           type: string
+          minLength: 1
           description: Value must appear in https://restcountries.com/v3.1/all
         password:
           type: string
-          description: "5-10 chars, ≥1 digit, ≥1 special"
+          minLength: 5
+          maxLength: 10
+          description: "5-10 chars, ≥1 digit, ≥1 special character"
         confirmPassword:
           type: string
+          description: "Must match password field"
         email:
           type: string
           format: email
+          description: "Valid email format required"
         profilePic:
           type: string
           format: uri
@@ -516,8 +773,12 @@ components:
       properties:
         username:
           type: string
+          minLength: 1
+          description: "Username is required and must be non-empty"
         password:
           type: string
+          minLength: 1
+          description: "Password is required and must be non-empty"
     FavoriteToggle:
       required:
       - recipeId
@@ -571,6 +832,10 @@ components:
         isSpoonacular:
           type: boolean
           description: Whether the recipe is from Spoonacular API or local database
+        source:
+          type: string
+          enum: ['db', 'spoon']
+          description: Source identifier for the recipe
     RecipeDetails:
       allOf:
       - $ref: '#/components/schemas/RecipePreview'
@@ -603,6 +868,7 @@ components:
           source:
             type: string
             description: Source of the recipe (db or spoon)
+            enum: ['db', 'spoon']
           isFamilyRecipe:
             type: boolean
             description: Whether this is a family recipe (only for DB recipes)
@@ -673,32 +939,7 @@ components:
             when:
               type: string
               description: When this family recipe originated
-    inline_response_200:
-      type: object
-      properties:
-        summary:
-          type: string
-        team:
-          type: array
-          items:
-            $ref: '#/components/schemas/inline_response_200_team'
-    inline_response_201:
-      required:
-      - message
-      - recipe_id
-      type: object
-      properties:
-        recipe_id:
-          oneOf:
-          - type: string
-          - type: integer
-        message:
-          type: string
-    recipeId:
-      oneOf:
-      - type: string
-      - type: integer
-    inline_response_200_team:
+    TeamMember:
       required:
       - contact
       - name
@@ -711,84 +952,6 @@ components:
           type: string
         contact:
           type: string
-    SuccessResponse:
-      type: object
-      required:
-        - success
-        - message
-      properties:
-        success:
-          type: boolean
-        message:
-          type: string
-        redirect:
-          type: string
-          description: Redirect URL after successful operation
-    AboutResponse:
-      type: object
-      required:
-        - summary
-        - team
-      properties:
-        summary:
-          type: string
-        team:
-          type: array
-          items:
-            $ref: '#/components/schemas/inline_response_200_team'
-        previousProjects:
-          type: array
-          items:
-            type: object
-            properties:
-              title:
-                type: string
-              url:
-                type: string
-                format: uri
-    MainPageResponse:
-      required:
-      - lastWatched
-      - random
-      type: object
-      properties:
-        random:
-          type: array
-          items:
-            allOf:
-            - $ref: '#/components/schemas/RecipePreview'
-            - type: object
-              properties:
-                isSpoonacular:
-                  type: boolean
-                  enum: [true]
-                  description: Random recipes are always from Spoonacular
-                isFavorite:
-                  type: boolean
-                  description: Only present when user is authenticated
-        lastWatched:
-          oneOf:
-          - type: array
-            items:
-              allOf:
-              - $ref: '#/components/schemas/RecipePreview'
-              - type: object
-                properties:
-                  isFavorite:
-                    type: boolean
-                    description: Whether this recipe is in user's favorites
-            description: Last watched recipes (when user is authenticated)
-          - required:
-            - loginRequired
-            - loginUrl
-            type: object
-            properties:
-              loginRequired:
-                type: boolean
-                enum: [true]
-              loginUrl:
-                type: string
-            description: Login prompt (when user is not authenticated)
     CookingModeResponse:
       type: object
       required:
@@ -954,10 +1117,29 @@ components:
       properties:
         message:
           type: string
+          example: "The Recipe successfully added to favorites"
         isFavorite:
           type: boolean
+          description: Current favorite status after toggle
         success:
           type: boolean
+          example: true
+    recipeId:
+      oneOf:
+      - type: string
+      - type: integer
+    SuccessResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
   securitySchemes:
     cookieAuth:
       type: apiKey
