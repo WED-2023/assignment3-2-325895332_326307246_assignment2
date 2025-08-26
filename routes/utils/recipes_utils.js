@@ -1,16 +1,33 @@
+/**
+ * Recipe Utilities Module
+ * 
+ * This module provides utility functions for recipe data management and retrieval.
+ * It handles both Spoonacular API integration and local database operations for recipes.
+ * 
+ * Features:
+ * - Recipe information retrieval from multiple sources
+ * - Recipe preview generation with user-specific data
+ * - Spoonacular API integration with error handling
+ * - Database recipe management
+ * - User interaction tracking (favorites, watched recipes)
+ */
+
 const axios = require("axios");
 const DButils = require("./DButils");
+
+// Spoonacular API configuration
 const api_domain = "https://api.spoonacular.com/recipes";
 const api_key = process.env.SPOONACULAR_API_KEY;
 
 /**
- * Retrieves recipe information from Spoonacular API or local DB.
- * @param {string|number} recipe_id - The recipe's ID.
- * @param {boolean} [isSpoonacular=false] - If true, fetch from Spoonacular; else from DB.
- * @returns {Promise<{ data: object }>} - Object with .data property containing recipe info.
- * @throws {object} If recipe_id is invalid or not found.
+ * Retrieves comprehensive recipe information from Spoonacular API or local database
+ * @param {string|number} recipe_id - The unique identifier of the recipe
+ * @param {boolean} [isSpoonacular=false] - Source flag: true for Spoonacular API, false for local DB
+ * @returns {Promise<{ data: object }>} Recipe data wrapped in a data property for consistency
+ * @throws {object} Error object with status and message for invalid parameters or not found recipes
  */
 async function getRecipeInformation(recipe_id, isSpoonacular = false) {
+  // Validate input parameters
   if (
     recipe_id === undefined ||
     recipe_id === null ||
@@ -19,7 +36,9 @@ async function getRecipeInformation(recipe_id, isSpoonacular = false) {
   ) {
     throw { status: 400, message: "Invalid recipe_id or isSpoonacular" };
   }
+  
   if (!isSpoonacular) {
+    // Handle local database recipe retrieval
     const id = parseInt(recipe_id, 10);
     if (Number.isNaN(id)) {
       throw { status: 400, message: "recipe_id must be numeric for DB source" };
@@ -55,13 +74,16 @@ async function getRecipeInformation(recipe_id, isSpoonacular = false) {
 }
 
 /**
- * Returns a preview object for a recipe.
- * @param {string|number} recipe_id - The recipe's ID.
- * @param {boolean} [isSpoonacular=false] - If true, fetch from Spoonacular.
- * @param {string|number} [user_id=null] - The user's ID for checking watched status.
- * @returns {Promise<object>} - Preview object.
+ * Generates a preview object for a recipe with essential display information
+ * Includes user-specific data like watched status for personalized experience
+ * @param {string|number} recipe_id - The unique identifier of the recipe
+ * @param {boolean} [isSpoonacular=false] - Source flag: true for Spoonacular API, false for local DB
+ * @param {string|number} [user_id=null] - User ID for checking personalized data (watched status)
+ * @returns {Promise<object>} Condensed recipe object optimized for list/card display
+ * @throws {object} Error object for invalid parameters or database errors
  */
 async function getRecipePreview(recipe_id, isSpoonacular = false, user_id = null) {
+  // Validate input parameters
   if (
     recipe_id === undefined ||
     recipe_id === null ||
@@ -109,7 +131,7 @@ async function getRecipePreview(recipe_id, isSpoonacular = false, user_id = null
     vegan,
     vegetarian,
     glutenFree,
-    isSpoonacular,
+    isSpoonacular: isSpoonacular, // Explicitly set the source
     isWatched: isWatched
   };
 }
@@ -193,6 +215,7 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false, user_id = null
       servings,
       ingredients,
       instructions,
+      isSpoonacular: true, // Explicitly set for Spoonacular recipes
       isWatched
     };
   }
@@ -230,6 +253,7 @@ async function getRecipeDetails(recipe_id, isSpoonacular = false, user_id = null
     isFamilyRecipe: Boolean(isFamilyRecipe),
     familyWho,
     familyWhen,
+    isSpoonacular: false, // Explicitly set for DB recipes
     isWatched
   };
 }
@@ -266,10 +290,12 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances, use
     vegan: r.vegan,
     vegetarian: r.vegetarian,
     glutenFree: r.glutenFree,
-    isSpoonacular: true
+    isSpoonacular: true,
+    isWatched: false, // Default, will be set by caller
+    isFavorite: false // Default, will be set by caller
   }));
 
-  // Add watched status if user is logged in
+  // Only add watched status if user is logged in - NO FAVORITE CHECKING HERE
   if (user_id) {
     const recipeIds = recipes.map(r => r.id);
     if (recipeIds.length > 0) {
@@ -278,27 +304,22 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances, use
         SELECT recipe_id FROM LastWatchedRecipes 
         WHERE user_id = ? AND isSpoonacular = 1 AND recipe_id IN (${placeholders})
       `;
+      
       try {
         const connection = await require("./MySql").connection();
         const params = [user_id, ...recipeIds];
         const watchedResult = await connection.query(watchedQuery, params);
         await connection.release();
         
-        const watchedSet = new Set(watchedResult.map(w => w.recipe_id.toString()));
+        const watchedSet = new Set(watchedResult.map(w => String(w.recipe_id)));
+        
         recipes.forEach(recipe => {
-          recipe.isWatched = watchedSet.has(recipe.id.toString());
+          recipe.isWatched = watchedSet.has(String(recipe.id));
         });
       } catch (error) {
         console.error("Error checking watched status for search results:", error);
-        recipes.forEach(recipe => {
-          recipe.isWatched = false;
-        });
       }
     }
-  } else {
-    recipes.forEach(recipe => {
-      recipe.isWatched = false;
-    });
   }
 
   return recipes;
@@ -326,10 +347,12 @@ async function getRandomRecipes(number = 10, user_id = null) {
     vegan: r.vegan,
     vegetarian: r.vegetarian,
     glutenFree: r.glutenFree,
-    isSpoonacular: true
+    isSpoonacular: true,
+    isWatched: false, // Default, will be set by caller
+    isFavorite: false // Default, will be set by caller
   }));
 
-  // Add watched status if user is logged in
+  // Only add watched status if user is logged in - NO FAVORITE CHECKING HERE
   if (user_id) {
     const recipeIds = recipes.map(r => r.id);
     if (recipeIds.length > 0) {
@@ -338,27 +361,22 @@ async function getRandomRecipes(number = 10, user_id = null) {
         SELECT recipe_id FROM LastWatchedRecipes 
         WHERE user_id = ? AND isSpoonacular = 1 AND recipe_id IN (${placeholders})
       `;
+      
       try {
         const connection = await require("./MySql").connection();
         const params = [user_id, ...recipeIds];
         const watchedResult = await connection.query(watchedQuery, params);
         await connection.release();
         
-        const watchedSet = new Set(watchedResult.map(w => w.recipe_id.toString()));
+        const watchedSet = new Set(watchedResult.map(w => String(w.recipe_id)));
+        
         recipes.forEach(recipe => {
-          recipe.isWatched = watchedSet.has(recipe.id.toString());
+          recipe.isWatched = watchedSet.has(String(recipe.id));
         });
       } catch (error) {
         console.error("Error checking watched status for random recipes:", error);
-        recipes.forEach(recipe => {
-          recipe.isWatched = false;
-        });
       }
     }
-  } else {
-    recipes.forEach(recipe => {
-      recipe.isWatched = false;
-    });
   }
 
   return recipes;

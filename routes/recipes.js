@@ -1,35 +1,54 @@
-// routes/recipes.js
+/**
+ * Recipes Routes Module
+ * 
+ * Handles all recipe-related API endpoints including retrieval, creation, and search.
+ * Integrates both Spoonacular API data and local database recipes with user-specific
+ * personalization features.
+ * 
+ * Features:
+ * - Recipe retrieval from multiple sources (API and database)
+ * - User-personalized recipe recommendations
+ * - Recipe creation and management
+ * - Advanced recipe search with filters
+ * - User interaction tracking (favorites, viewing history)
+ * - Cooking mode support with progress tracking
+ */
+
 const express = require("express");
-const router  = express.Router();
+const router = express.Router();
 
 const recipes_utils = require("./utils/recipes_utils");
-const user_utils    = require("./utils/user_utils");
+const user_utils = require("./utils/user_utils");
 
 /**
  * GET /recipes
- * Main page endpoint.
- * - If user is logged in: returns 3 last watched recipes (preview).
- * - If not logged in: returns 3 random Spoonacular recipes (preview).
+ * Main page endpoint providing personalized recipe recommendations
+ * Returns different content based on user authentication status:
+ * - Authenticated users: Random recipes + last watched recipes with favorite status
+ * - Guest users: Random recipes from Spoonacular API
  */
 router.get("/", async (req, res, next) => {
   try {
     const payload = { random: [], lastWatched: [] };
     const user_id = req.session?.user_id || null;
 
-    // Always show 3 random Spoonacular recipes
+    // Provide 3 random Spoonacular recipes for all users
     payload.random = await recipes_utils.getRandomRecipes(3, user_id);
 
-    // If user is logged in, check their favorites and add to random recipes
+    // Add personalized content for authenticated users
     if (user_id) {
-      const favorites = await user_utils.getFavoriteRecipes(user_id);
+      // Get user's Spoonacular favorites for preference indication
+      const DButils = require("./utils/DButils");
+      const spoonacularFavoritesResult = await DButils.execQuery(`
+        SELECT recipe_id FROM FavoriteRecipes 
+        WHERE user_id = '${user_id}' AND isSpoonacular = 1
+      `);
+      const spoonacularFavoriteIds = new Set(spoonacularFavoritesResult.map(f => String(f.recipe_id)));
       
-      // Mark favorites in random recipes
+      // Apply favorites to random recipes
       payload.random = payload.random.map(recipe => ({
         ...recipe,
-        isSpoonacular: true,
-        isFavorite: favorites.some(fav => 
-          fav.recipe_id == recipe.id && Boolean(fav.isSpoonacular) === true
-        )
+        isFavorite: spoonacularFavoriteIds.has(String(recipe.id))
       }));
 
       // Get last watched recipes
@@ -41,20 +60,33 @@ router.get("/", async (req, res, next) => {
           )
         );
         
-        // Mark favorites and isSpoonacular in last watched recipes
+        // Get DB favorites
+        const dbFavoritesResult = await DButils.execQuery(`
+          SELECT recipe_id FROM FavoriteRecipes 
+          WHERE user_id = '${user_id}' AND isSpoonacular = 0
+        `);
+        const dbFavoriteIds = new Set(dbFavoritesResult.map(f => String(f.recipe_id)));
+        
+        // Apply source-specific favorites to last watched
         payload.lastWatched = lastWatchedPreviews.map((recipe, index) => {
           const originalWatched = watchedRows[index];
+          const watchedIsSpoonacular = Boolean(originalWatched.isSpoonacular);
+          
+          let isFavorite = false;
+          if (watchedIsSpoonacular) {
+            isFavorite = spoonacularFavoriteIds.has(String(recipe.id));
+          } else {
+            isFavorite = dbFavoriteIds.has(String(recipe.id));
+          }
+          
           return {
             ...recipe,
-            isSpoonacular: Boolean(originalWatched.isSpoonacular),
-            isFavorite: favorites.some(fav => 
-              fav.recipe_id == recipe.id && Boolean(fav.isSpoonacular) === Boolean(originalWatched.isSpoonacular)
-            )
+            isSpoonacular: watchedIsSpoonacular,
+            isFavorite: isFavorite
           };
         });
       }
     } else {
-      // User is not logged in: show login option
       payload.lastWatched = { loginRequired: true, loginUrl: "/login" };
     }
 
@@ -169,6 +201,7 @@ router.get("/search", async (req, res, next) => {
     const allowedNumbers = [5, 10, 15];
     let num = parseInt(number);
     if (!allowedNumbers.includes(num)) num = 5;
+    
     const results = await recipes_utils.searchRecipes(
       query,
       num,
@@ -177,6 +210,21 @@ router.get("/search", async (req, res, next) => {
       intolerances,
       user_id
     );
+
+    // Apply favorites ONLY here for Spoonacular recipes
+    if (user_id) {
+      const DButils = require("./utils/DButils");
+      const spoonacularFavoritesResult = await DButils.execQuery(`
+        SELECT recipe_id FROM FavoriteRecipes 
+        WHERE user_id = '${user_id}' AND isSpoonacular = 1
+      `);
+      const spoonacularFavoriteIds = new Set(spoonacularFavoritesResult.map(f => String(f.recipe_id)));
+      
+      results.forEach(recipe => {
+        recipe.isFavorite = spoonacularFavoriteIds.has(String(recipe.id));
+      });
+    }
+
     res.status(200).send(results);
   } catch (error) {
     next(error);
@@ -195,6 +243,8 @@ router.get("/:recipeId", async (req, res, next) => {
     let source = (req.query.source || "spoon").toLowerCase();
     const user_id = req.session?.user_id || null;
 
+    console.log('Recipe details request:', { recipeId, source, user_id });
+
     // Input validation
     if (!recipeId || typeof recipeId !== "string" && typeof recipeId !== "number") {
       return res.status(400).send({ message: "Invalid recipeId" });
@@ -207,22 +257,29 @@ router.get("/:recipeId", async (req, res, next) => {
     
     const isSpoonacular = source === "spoon";
 
-    // Get recipe details
+    // Get recipe details with explicit source parameter
     const recipe = await recipes_utils.getRecipeDetails(recipeId, isSpoonacular, user_id);
     recipe.source = source;
-    recipe.isSpoonacular = isSpoonacular;
+    recipe.isSpoonacular = isSpoonacular; // Ensure this is set correctly
 
     // User-dependent operations: Watched + Favorite
     if (user_id) {
-      // Mark as watched
+      // Mark as watched with correct source
       await user_utils.markAsWatched(user_id, recipeId, isSpoonacular);
 
-      // Check if favorite
+      // Check if favorite with correct source - use strict string comparison
       const favs = await user_utils.getFavoriteRecipes(user_id);
       recipe.isFavorite = favs.some(
-        r => r.recipe_id == recipeId && Boolean(r.isSpoonacular) === isSpoonacular
+        r => String(r.recipe_id) === String(recipeId) && Boolean(r.isSpoonacular) === isSpoonacular
       );
       recipe.isWatched = true;
+      
+      console.log('Recipe favorite check:', {
+        recipeId,
+        isSpoonacular,
+        favorites: favs,
+        isFavorite: recipe.isFavorite
+      });
     }
 
     res.status(200).send(recipe);
@@ -259,7 +316,7 @@ router.get("/:recipeId/cooking-mode", async (req, res, next) => {
     
     const isSpoonacular = source === "spoon";
 
-    // Get recipe details
+    // Get recipe details with explicit source parameter
     const recipe = await recipes_utils.getRecipeDetails(recipeId, isSpoonacular, user_id);
     
     // Adjust quantities if multiplier is provided
@@ -305,7 +362,9 @@ router.get("/:recipeId/cooking-mode", async (req, res, next) => {
       currentStep: 0,
       totalSteps: recipe.instructions ? recipe.instructions.length : 0,
       servingMultiplier: servingMultiplier,
-      originalServings: recipe.servings ? Math.round(recipe.servings / servingMultiplier) : null
+      originalServings: recipe.servings ? Math.round(recipe.servings / servingMultiplier) : null,
+      isSpoonacular: isSpoonacular, // Ensure this is set correctly
+      source: source
     };
 
     res.status(200).send(cookingModeData);
